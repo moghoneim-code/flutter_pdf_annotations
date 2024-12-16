@@ -50,6 +50,11 @@ android {
     }
 
     dependencies {
+        // Add AppCompat and Core-KTX dependencies for AndroidX support
+        implementation("androidx.appcompat:appcompat:1.6.1")
+        implementation("androidx.core:core-ktx:1.10.1")
+
+        // Testing dependencies
         testImplementation("org.jetbrains.kotlin:kotlin-test")
         testImplementation("org.mockito:mockito-core:5.0.0")
     }
@@ -59,9 +64,9 @@ android {
             useJUnitPlatform()
 
             testLogging {
-               events "passed", "skipped", "failed", "standardOut", "standardError"
-               outputs.upToDateWhen {false}
-               showStandardStreams = true
+                events "passed", "skipped", "failed", "standardOut", "standardError"
+                outputs.upToDateWhen { false }
+                showStandardStreams = true
             }
         }
     }

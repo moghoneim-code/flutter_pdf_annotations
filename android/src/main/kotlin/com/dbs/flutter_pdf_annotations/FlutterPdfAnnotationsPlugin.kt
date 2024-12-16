@@ -1,43 +1,49 @@
-package com.example.flutter_pdf_annotations
+package com.dbs.flutter_pdf_annotations
 
+import android.content.Context
 import android.content.Intent
-import androidx.annotation.NonNull
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
-import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 
-class PdfAnnotationsPlugin : FlutterPlugin, MethodCallHandler {
+class FlutterPdfAnnotationsPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
   private lateinit var channel: MethodChannel
+  private lateinit var context: Context
 
-  override fun onAttachedToEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
+  override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+    context = binding.applicationContext
     channel = MethodChannel(binding.binaryMessenger, "flutter_pdf_annotations")
     channel.setMethodCallHandler(this)
   }
 
-  override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
+  override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
     channel.setMethodCallHandler(null)
   }
 
   override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
     when (call.method) {
-      "openPDF" -> {
-        val filePath = call.argument<String>("filePath")
-        val savePath = call.argument<String>("savePath")
-
-        if (filePath == null || savePath == null) {
-          result.error("INVALID_ARGUMENTS", "File path or save path is missing", null)
-          return
-        }
-
-        val intent = Intent(context, PdfActivity::class.java).apply {
-          putExtra("filePath", filePath)
-          putExtra("savePath", savePath)
-        }
-        context.startActivity(intent)
-        result.success("PDF viewer opened")
-      }
+      "openPDF" -> handleOpenPDF(call, result)
       else -> result.notImplemented()
     }
+  }
+
+  private fun handleOpenPDF(call: MethodCall, result: MethodChannel.Result) {
+    val args = call.arguments as? Map<*, *>
+    val filePath = args?.get("filePath") as? String
+    val savePath = args?.get("savePath") as? String
+
+    if (filePath.isNullOrEmpty() || savePath.isNullOrEmpty()) {
+      result.error("INVALID_ARGUMENTS", "filePath or savePath is missing", null)
+      return
+    }
+
+    val intent = Intent(context, PDFViewerActivity::class.java).apply {
+      putExtra("filePath", filePath)
+      putExtra("savePath", savePath)
+      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+    context.startActivity(intent)
+    result.success(null)
   }
 }
