@@ -1,10 +1,5 @@
 import 'dart:developer';
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
-import 'dart:async';
-
-import 'package:flutter/services.dart';
 import 'package:flutter_pdf_annotations/flutter_pdf_annotations.dart';
 import 'package:file_picker/file_picker.dart';
 
@@ -33,7 +28,6 @@ class _MyAppState extends State<MyApp> {
       home: Scaffold(
         floatingActionButton: FloatingActionButton(
           onPressed: () async {
-
             FilePickerResult? result = await FilePicker.platform.pickFiles(
               type: FileType.custom,
               allowedExtensions: ['pdf'],

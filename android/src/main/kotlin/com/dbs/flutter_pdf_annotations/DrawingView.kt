@@ -4,154 +4,166 @@ import android.content.Context
 import android.graphics.*
 import android.view.MotionEvent
 import android.view.View
+import android.util.DisplayMetrics
+import android.view.WindowInsets
 
 class DrawingView(context: Context) : View(context) {
-    private val paint = Paint().apply {
+    private var paint = Paint().apply {
         isAntiAlias = true
         strokeWidth = 5f
         color = Color.RED
         style = Paint.Style.STROKE
         strokeJoin = Paint.Join.ROUND
+        strokeCap = Paint.Cap.ROUND
     }
 
-    private var originalBitmap: Bitmap? = null
-    private var annotationBitmap: Bitmap? = null
-    private var canvas: Canvas? = null
+    private var currentPath: Path? = null
+    private var paths = mutableListOf<AnnotationData>()
+    private var pageWidth = 0
+    private var pageHeight = 0
+    private var pdfViewBounds = RectF()
+    private var matrix = Matrix()
+    private var inverseMatrix = Matrix()
+    private var originalStrokeWidth = 5f
 
-    private var viewWidth = 0
-    private var viewHeight = 0
-    private var bitmapWidth = 0
-    private var bitmapHeight = 0
+    data class AnnotationData(
+        val path: Path,
+        val strokeWidth: Float,
+        val color: Int
+    )
 
-    private val paths = mutableListOf<PathData>()
-    private var currentPath = Path()
-    private var isDrawing = false
-
-    // Data class to store path and its paint properties
-    data class PathData(val path: Path, val paint: Paint)
-
-    fun setBitmap(bitmap: Bitmap) {
-        originalBitmap = bitmap
-        bitmapWidth = bitmap.width
-        bitmapHeight = bitmap.height
-        annotationBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-        canvas = Canvas(annotationBitmap!!)
-        invalidate()
+    fun setColor(color: Int) {
+        paint = Paint(paint).apply {
+            this.color = color
+        }
     }
 
-    fun getAnnotatedBitmap(): Bitmap? = annotationBitmap
-
-    fun clearAnnotations() {
-        annotationBitmap = originalBitmap?.copy(Bitmap.Config.ARGB_8888, true)
-        canvas = Canvas(annotationBitmap!!)
-        paths.clear()
-        currentPath.reset()
-        invalidate()
+    fun setStrokeWidth(width: Float) {
+        originalStrokeWidth = width
+        updatePaintStrokeWidth()
     }
 
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        super.onSizeChanged(w, h, oldw, oldh)
-        viewWidth = w
-        viewHeight = h
+    private fun updatePaintStrokeWidth() {
+        // Scale stroke width based on PDF to view ratio
+        val scaleFactor = getScaleFactor()
+        paint.strokeWidth = originalStrokeWidth / scaleFactor
     }
+
+    private fun getScaleFactor(): Float {
+        // Calculate actual scale factor between PDF and view coordinates
+        return if (pageWidth > 0 && pdfViewBounds.width() > 0) {
+            pdfViewBounds.width() / pageWidth
+        } else 1f
+    }
+
+    fun setPdfViewBounds(bounds: RectF) {
+        pdfViewBounds = bounds
+        updateMatrix()
+    }
+
+    fun setPageSize(width: Int, height: Int) {
+        pageWidth = width
+        pageHeight = height
+        updateMatrix()
+        updatePaintStrokeWidth()
+    }
+
+    private fun updateMatrix() {
+        if (pageWidth <= 0 || pageHeight <= 0 || pdfViewBounds.isEmpty) return
+
+        matrix.reset()
+
+        // Calculate visible content bounds
+        val contentWidth = pdfViewBounds.width()
+        val contentHeight = pdfViewBounds.height()
+
+        // Calculate scale to fit the page
+        val scaleX = contentWidth / pageWidth
+        val scaleY = contentHeight / pageHeight
+        val scale = Math.min(scaleX, scaleY)
+
+        // Calculate centering offsets
+        val translateX = pdfViewBounds.left + (contentWidth - pageWidth * scale) / 2f
+        val translateY = pdfViewBounds.top + (contentHeight - pageHeight * scale) / 2f
+
+        matrix.setScale(scale, scale)
+        matrix.postTranslate(translateX, translateY)
+        matrix.invert(inverseMatrix)
+    }
+    fun getPaths(): List<Path> {
+        return paths.map { it.path }
+    }
+
+    fun getAnnotations(): List<AnnotationData> = paths.toList()
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        // Draw the PDF bitmap
-        annotationBitmap?.let { bitmap ->
-            // Calculate scaling to maintain aspect ratio
-            val scale = calculateScaleToFit()
-            val scaledWidth = bitmapWidth * scale
-            val scaledHeight = bitmapHeight * scale
 
-            // Calculate offsets to center the image
-            val left = (viewWidth - scaledWidth) / 2f
-            val top = (viewHeight - scaledHeight) / 2f
+        canvas.save()
+        canvas.concat(matrix)
 
-            // Draw bitmap with calculated scaling
-            val destRect = RectF(left, top, left + scaledWidth, top + scaledHeight)
-            canvas.drawBitmap(bitmap, null, destRect, null)
-
-            // Draw saved paths
-            paths.forEach { pathData ->
-                canvas.save()
-                canvas.translate(left, top)
-                canvas.scale(scale, scale)
-                canvas.drawPath(pathData.path, pathData.paint)
-                canvas.restore()
-            }
-
-            // Draw the current path if drawing
-            if (isDrawing) {
-                canvas.save()
-                canvas.translate(left, top)
-                canvas.scale(scale, scale)
-                canvas.drawPath(currentPath, paint)
-                canvas.restore()
-            }
+        // Draw all paths
+        paths.forEach { annotationData ->
+            paint.color = annotationData.color
+            paint.strokeWidth = annotationData.strokeWidth
+            canvas.drawPath(annotationData.path, paint)
         }
-    }
 
-    private fun calculateScaleToFit(): Float {
-        val scaleX = viewWidth.toFloat() / bitmapWidth
-        val scaleY = viewHeight.toFloat() / bitmapHeight
-        return minOf(scaleX, scaleY)
-    }
+        // Draw current path
+        currentPath?.let {
+            canvas.drawPath(it, paint)
+        }
 
-    private fun mapTouchCoordinates(x: Float, y: Float): PointF {
-        // Calculate scaling
-        val scale = calculateScaleToFit()
-
-        // Calculate offsets to center the image
-        val scaledWidth = bitmapWidth * scale
-        val scaledHeight = bitmapHeight * scale
-        val left = (viewWidth - scaledWidth) / 2f
-        val top = (viewHeight - scaledHeight) / 2f
-
-        // Map touch coordinates to bitmap coordinates
-        val mappedX = (x - left) / scale
-        val mappedY = (y - top) / scale
-
-        return PointF(mappedX, mappedY)
+        canvas.restore()
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        // Check if no bitmap is set
-        if (annotationBitmap == null) return false
+        if (!isEnabled) return false
 
-        val mappedPoint = mapTouchCoordinates(event.x, event.y)
-        val x = mappedPoint.x
-        val y = mappedPoint.y
-
-        // Check if touch is within bitmap bounds
-        if (x < 0 || x > bitmapWidth || y < 0 || y > bitmapHeight) {
-            return false
-        }
+        // Transform touch coordinates to PDF coordinates
+        val points = floatArrayOf(event.x, event.y)
+        inverseMatrix.mapPoints(points)
+        val x = points[0]
+        val y = points[1]
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                currentPath = Path()
-                currentPath.moveTo(x, y)
-                isDrawing = true
-                invalidate()
+                currentPath = Path().apply {
+                    moveTo(x, y)
+                }
+                return true
             }
             MotionEvent.ACTION_MOVE -> {
-                currentPath.lineTo(x, y)
+                currentPath?.lineTo(x, y)
                 invalidate()
+                return true
             }
             MotionEvent.ACTION_UP -> {
-                // Save the completed path
-                paths.add(PathData(currentPath, Paint(paint)))
-
-                // Draw the path onto the annotation bitmap
-                canvas?.let {
-                    it.drawPath(currentPath, paint)
+                currentPath?.let {
+                    paths.add(AnnotationData(
+                        path = it,
+                        strokeWidth = paint.strokeWidth,
+                        color = paint.color
+                    ))
                 }
-
-                isDrawing = false
+                currentPath = null
                 invalidate()
+                return true
             }
+            else -> return false
         }
-        return true
+    }
+
+    fun undo() {
+        if (paths.isNotEmpty()) {
+            paths.removeAt(paths.size - 1)
+            invalidate()
+        }
+    }
+
+    fun clearAnnotations() {
+        paths.clear()
+        currentPath = null
+        invalidate()
     }
 }
