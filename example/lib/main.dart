@@ -20,29 +20,12 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  final _flutterPdfAnnotationsPlugin = FlutterPdfAnnotations();
-
   @override
   void initState() {
     super.initState();
-    loadImages();
   }
 
-  final List<String> _imagesPath = [
-    'assets/1.jpg',
-    'assets/2.jpg',
-    'assets/3.jpg',
-  ];
-  final List<Uint8List> _images = [];
 
-  // Platform messages are asynchronous, so we initialize in an async method.
-  Future<void> loadImages() async {
-    for (final imagePath in _imagesPath) {
-      final ByteData data = await rootBundle.load(imagePath);
-      final Uint8List bytes = data.buffer.asUint8List();
-      _images.add(bytes);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +33,6 @@ class _MyAppState extends State<MyApp> {
       home: Scaffold(
         floatingActionButton: FloatingActionButton(
           onPressed: () async {
-            FlutterPdfAnnotations flutterPdfAnnotations = FlutterPdfAnnotations();
 
             FilePickerResult? result = await FilePicker.platform.pickFiles(
               type: FileType.custom,
@@ -59,12 +41,11 @@ class _MyAppState extends State<MyApp> {
             if (result != null) {
               log(result.files.single.path!);
               await FlutterPdfAnnotations.openPDF(
-                savePath: result.files.single.path!,
                 filePath: result.files.single.path!,
                 onFileSaved: (path) {
+                  log('File saved at: $path');
                   FlutterPdfAnnotations.openPDF(
-                    savePath: path,
-                    filePath: path,
+                    filePath: path!,
                     onFileSaved: (path) {
                       log('File saved at: $path');
                     },

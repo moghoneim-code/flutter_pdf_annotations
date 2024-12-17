@@ -10,6 +10,14 @@ class FlutterPdfAnnotationsPlugin : FlutterPlugin, MethodChannel.MethodCallHandl
   private lateinit var channel: MethodChannel
   private lateinit var context: Context
 
+  companion object {
+    private var saveResultCallback: ((String?) -> Unit)? = null
+
+    fun notifySaveResult(path: String?) {
+      saveResultCallback?.invoke(path)
+    }
+  }
+
   override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
     context = binding.applicationContext
     channel = MethodChannel(binding.binaryMessenger, "flutter_pdf_annotations")
@@ -22,28 +30,21 @@ class FlutterPdfAnnotationsPlugin : FlutterPlugin, MethodChannel.MethodCallHandl
 
   override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
     when (call.method) {
-      "openPDF" -> handleOpenPDF(call, result)
+      "openPDF" -> {
+        val filePath = call.argument<String>("filePath")
+        val savePath = call.argument<String>("savePath")
+        val intent = Intent(context, PDFViewerActivity::class.java).apply {
+          putExtra("filePath", filePath)
+          putExtra("savePath", savePath)
+          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        saveResultCallback = { savedPath ->
+          channel.invokeMethod("onPdfSaved", savedPath)
+        }
+        context.startActivity(intent)
+        result.success(null)
+      }
       else -> result.notImplemented()
     }
-  }
-
-  private fun handleOpenPDF(call: MethodCall, result: MethodChannel.Result) {
-    val args = call.arguments as? Map<*, *>
-    val filePath = args?.get("filePath") as? String
-    val savePath = args?.get("savePath") as? String
-
-    if (filePath.isNullOrEmpty() || savePath.isNullOrEmpty()) {
-      result.error("INVALID_ARGUMENTS", "filePath or savePath is missing", null)
-      return
-    }
-
-    val intent = Intent(context, PDFViewerActivity::class.java).apply {
-      putExtra("filePath", filePath)
-      putExtra("savePath", savePath)
-      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
-
-    context.startActivity(intent)
-    result.success(null)
   }
 }
