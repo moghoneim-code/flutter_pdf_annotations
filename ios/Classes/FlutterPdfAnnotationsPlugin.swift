@@ -3,90 +3,81 @@ import UIKit
 import PDFKit
 
 public class FlutterPdfAnnotationsPlugin: NSObject, FlutterPlugin {
-    private static weak var channel: FlutterMethodChannel?
-
+    private static var methodChannel: FlutterMethodChannel?
+    
     public static func register(with registrar: FlutterPluginRegistrar) {
-        let methodChannel = FlutterMethodChannel(name: "flutter_pdf_annotations", binaryMessenger: registrar.messenger())
-        channel = methodChannel
+        let channel = FlutterMethodChannel(name: "flutter_pdf_annotations", binaryMessenger: registrar.messenger())
+        methodChannel = channel
         let instance = FlutterPdfAnnotationsPlugin()
-        registrar.addMethodCallDelegate(instance, channel: methodChannel)
+        registrar.addMethodCallDelegate(instance, channel: channel)
     }
-
+    
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         switch call.method {
         case "openPDF":
             handleOpenPDFMethod(call: call, result: result)
         default:
-            sendLogToFlutter("Unimplemented method: \(call.method)")
             result(FlutterMethodNotImplemented)
         }
     }
-
+    
     private func handleOpenPDFMethod(call: FlutterMethodCall, result: @escaping FlutterResult) {
         guard let args = call.arguments as? [String: Any],
               let filePath = args["filePath"] as? String,
               let savePath = args["savePath"] as? String else {
-            sendLogToFlutter("Missing or invalid arguments for method 'openPDF'")
             result(FlutterError(code: "INVALID_ARGUMENTS",
-                                message: "Missing or invalid arguments",
-                                details: nil))
+                              message: "Missing or invalid arguments",
+                              details: nil))
             return
         }
-
+        
         let pdfURL = URL(fileURLWithPath: filePath)
         let saveURL = URL(fileURLWithPath: savePath)
-
+        
         guard FileManager.default.fileExists(atPath: pdfURL.path) else {
-            sendLogToFlutter("File not found at path: \(filePath)")
             result(FlutterError(code: "FILE_NOT_FOUND",
-                                message: "File not found at path: \(filePath)",
-                                details: nil))
+                              message: "File not found at path: \(filePath)",
+                              details: nil))
             return
         }
-
-        sendLogToFlutter("File path: \(filePath), Save path: \(savePath)")
-
+        
+        // Send initial success for opening PDF
+        result(nil)
+        
         DispatchQueue.main.async {
-            self.presentPDFViewController(pdfURL: pdfURL, saveURL: saveURL, result: result)
+            self.presentPDFViewController(pdfURL: pdfURL, saveURL: saveURL)
         }
     }
-
-private func presentPDFViewController(pdfURL: URL, saveURL: URL, result: @escaping FlutterResult) {
-    let pdfViewController = PDFViewController(
-        pdfURL: pdfURL,
-        saveURL: saveURL,
-        logChannel: FlutterPdfAnnotationsPlugin.channel
-    ) { [weak self] savedFilePath in
-        guard let self = self else { return }
-        if let path = savedFilePath {
-            self.sendLogToFlutter("PDF saved at: \(path)")
-            result(path)
-        } else {
-            self.sendLogToFlutter("Failed to save the PDF")
-            result(FlutterError(code: "SAVE_FAILED",
-                                message: "Failed to save the PDF",
-                                details: nil))
+    
+    private func presentPDFViewController(pdfURL: URL, saveURL: URL) {
+        let pdfViewController = PDFViewController(
+            pdfURL: pdfURL,
+            saveURL: saveURL
+        ) { savedPath in
+            // This closure is called when saving is complete
+            if let path = savedPath {
+                // Notify Flutter of successful save
+                FlutterPdfAnnotationsPlugin.notifySaveResult(path)
+            } else {
+                // Notify Flutter of save failure
+                FlutterPdfAnnotationsPlugin.notifySaveResult(nil)
+            }
         }
+        
+        guard let rootVC = UIApplication.shared.windows.first?.rootViewController else {
+            FlutterPdfAnnotationsPlugin.notifySaveResult(nil)
+            return
+        }
+        
+        let navigationController = UINavigationController(rootViewController: pdfViewController)
+        navigationController.modalPresentationStyle = .fullScreen
+        rootVC.present(navigationController, animated: true, completion: nil)
     }
-
-    guard let rootVC = UIApplication.shared.windows.first?.rootViewController else {
-        self.sendLogToFlutter("Unable to find root view controller")
-        result(FlutterError(code: "NO_ROOT_VIEW_CONTROLLER",
-                            message: "Unable to find root view controller",
-                            details: nil))
-        return
-    }
-
-    let navigationController = UINavigationController(rootViewController: pdfViewController)
-    navigationController.modalPresentationStyle = .fullScreen // Set presentation style to fullscreen
-    rootVC.present(navigationController, animated: true) {
-        self.sendLogToFlutter("Presented PDFViewController")
-    }
-}
-
-
-    private func sendLogToFlutter(_ message: String) {
-        FlutterPdfAnnotationsPlugin.channel?.invokeMethod("log", arguments: message)
+    
+    private static func notifySaveResult(_ path: String?) {
+        DispatchQueue.main.async {
+            methodChannel?.invokeMethod("onPdfSaved", arguments: path)
+        }
     }
 }
 
@@ -96,80 +87,74 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
     private var pdfView: PDFView!
     private var penThickness: CGFloat = 2.0
     private var penColor: UIColor = .red
-    private var completion: ((String?) -> Void)?
-    private weak var logChannel: FlutterMethodChannel?
-
-    // Declare properties for drawing gestures
+    private var completion: ((String?) -> Void)
+    
+    private var isDrawingEnabled = false
     private var currentPath: UIBezierPath?
     private var currentAnnotation: PDFAnnotation?
     private var panGesture: UIPanGestureRecognizer!
+    private var drawingButton: UIButton!
+    private var originalGestureRecognizers: [UIGestureRecognizer]?
+    private var scrollView: UIScrollView?
 
-    init(pdfURL: URL,
-         saveURL: URL,
-         logChannel: FlutterMethodChannel?,
-         completion: @escaping (String?) -> Void) {
+    init(pdfURL: URL, saveURL: URL, completion: @escaping (String?) -> Void) {
         self.pdfURL = pdfURL
         self.saveURL = saveURL
-        self.logChannel = logChannel
         self.completion = completion
         super.init(nibName: nil, bundle: nil)
     }
-
+    
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-
+    
     override func viewDidLoad() {
         super.viewDidLoad()
-        sendLogToFlutter("PDFViewController loaded with URL: \(pdfURL)")
         setupView()
         setupPDFView()
         setupToolbar()
         setupPanGesture()
         setupFloatingBar()
     }
-
+    
     private func setupView() {
         view.backgroundColor = .white
         navigationItem.title = "PDF Annotations"
     }
+    
+    private func setupPDFView() {
+        pdfView = PDFView(frame: view.bounds)
+        pdfView.autoScales = true
+        pdfView.displayMode = .singlePageContinuous
+        pdfView.displayDirection = .vertical
+        pdfView.translatesAutoresizingMaskIntoConstraints = false
+        pdfView.isUserInteractionEnabled = true
 
-private func setupPDFView() {
-    pdfView = PDFView(frame: view.bounds)
-    pdfView.autoScales = true
-    pdfView.displayMode = .singlePageContinuous
-    pdfView.displayDirection = .vertical
-    pdfView.translatesAutoresizingMaskIntoConstraints = false
-    pdfView.isUserInteractionEnabled = true
+        guard let document = PDFDocument(url: pdfURL) else {
+            return
+        }
 
-    guard let document = PDFDocument(url: pdfURL) else {
-        sendLogToFlutter("Failed to load PDF document")
-        return
-    }
+        pdfView.document = document
 
-    pdfView.document = document
-
-    // Remove text selection gestures
-    if let gestureRecognizers = pdfView.gestureRecognizers {
-        for recognizer in gestureRecognizers {
-            if let tapGesture = recognizer as? UITapGestureRecognizer,
-               NSStringFromClass(type(of: tapGesture)) == "UIPDFSelectionTapRecognizer" {
-                pdfView.removeGestureRecognizer(tapGesture)
+        if let gestureRecognizers = pdfView.gestureRecognizers {
+            for recognizer in gestureRecognizers {
+                if let tapGesture = recognizer as? UITapGestureRecognizer,
+                   NSStringFromClass(type(of: tapGesture)) == "UIPDFSelectionTapRecognizer" {
+                    pdfView.removeGestureRecognizer(tapGesture)
+                }
             }
         }
+
+        view.addSubview(pdfView)
+
+        NSLayoutConstraint.activate([
+            pdfView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            pdfView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            pdfView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            pdfView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
     }
-
-    view.addSubview(pdfView)
-
-    NSLayoutConstraint.activate([
-        pdfView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-        pdfView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-        pdfView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-        pdfView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-    ])
-}
-
-
+    
     private func setupToolbar() {
         let cancelButton = UIBarButtonItem(
             title: "Cancel",
@@ -186,11 +171,8 @@ private func setupPDFView() {
         navigationItem.leftBarButtonItem = cancelButton
         navigationItem.rightBarButtonItem = saveButton
     }
-
-      private var isDrawingEnabled = false
-        private var drawingButton: UIButton!
-
-private func setupFloatingBar() {
+    
+    private func setupFloatingBar() {
         let floatingContainer = UIView()
         floatingContainer.backgroundColor = UIColor.black.withAlphaComponent(0.6)
         floatingContainer.layer.cornerRadius = 10
@@ -221,7 +203,6 @@ private func setupFloatingBar() {
             floatingStack.bottomAnchor.constraint(equalTo: floatingContainer.bottomAnchor, constant: -10)
         ])
 
-        // Drawing Toggle Button
         drawingButton = UIButton(type: .system)
         drawingButton.setImage(UIImage(systemName: "pencil.slash"), for: .normal)
         drawingButton.tintColor = .white
@@ -241,59 +222,7 @@ private func setupFloatingBar() {
         floatingStack.addArrangedSubview(penSizeButton)
     }
 
-       private var originalGestureRecognizers: [UIGestureRecognizer]?
-    private var scrollView: UIScrollView?
-
-
-   @objc private func toggleDrawing() {
-        isDrawingEnabled.toggle()
-
-        if isDrawingEnabled {
-            // Disable existing gestures
-            originalGestureRecognizers = pdfView.gestureRecognizers
-            pdfView.gestureRecognizers?.forEach { recognizer in
-                recognizer.isEnabled = false
-            }
-
-            // Find and disable scrolling
-            scrollView = findScrollView(in: pdfView)
-            scrollView?.isScrollEnabled = false
-
-            // Re-enable pan gesture for drawing
-            panGesture.isEnabled = true
-
-            drawingButton.setImage(UIImage(systemName: "pencil"), for: .normal)
-            drawingButton.tintColor = .green
-            sendLogToFlutter("Drawing enabled")
-        } else {
-            // Restore original gestures
-            pdfView.gestureRecognizers = originalGestureRecognizers
-
-            // Re-enable scrolling
-            scrollView?.isScrollEnabled = true
-
-            drawingButton.setImage(UIImage(systemName: "pencil.slash"), for: .normal)
-            drawingButton.tintColor = .white
-            sendLogToFlutter("Drawing disabled")
-        }
-    }
-
-        private func findScrollView(in view: UIView) -> UIScrollView? {
-            for subview in view.subviews {
-                if let scrollView = subview as? UIScrollView {
-                    return scrollView
-                }
-
-                if let foundScrollView = findScrollView(in: subview) {
-                    return foundScrollView
-                }
-            }
-            return nil
-        }
-
-
-
-   private func setupPanGesture() {
+    private func setupPanGesture() {
         panGesture = UIPanGestureRecognizer(target: self, action: #selector(handlePanGesture(_:)))
         panGesture.cancelsTouchesInView = true
         panGesture.delaysTouchesBegan = true
@@ -301,8 +230,45 @@ private func setupFloatingBar() {
         pdfView.addGestureRecognizer(panGesture)
     }
 
-   @objc private func handlePanGesture(_ gesture: UIPanGestureRecognizer) {
-        // Only handle drawing if drawing is enabled
+    @objc private func toggleDrawing() {
+        isDrawingEnabled.toggle()
+
+        if isDrawingEnabled {
+            originalGestureRecognizers = pdfView.gestureRecognizers
+            pdfView.gestureRecognizers?.forEach { recognizer in
+                recognizer.isEnabled = false
+            }
+
+            scrollView = findScrollView(in: pdfView)
+            scrollView?.isScrollEnabled = false
+
+            panGesture.isEnabled = true
+
+            drawingButton.setImage(UIImage(systemName: "pencil"), for: .normal)
+            drawingButton.tintColor = .green
+        } else {
+            pdfView.gestureRecognizers = originalGestureRecognizers
+            scrollView?.isScrollEnabled = true
+
+            drawingButton.setImage(UIImage(systemName: "pencil.slash"), for: .normal)
+            drawingButton.tintColor = .white
+        }
+    }
+
+    private func findScrollView(in view: UIView) -> UIScrollView? {
+        for subview in view.subviews {
+            if let scrollView = subview as? UIScrollView {
+                return scrollView
+            }
+
+            if let foundScrollView = findScrollView(in: subview) {
+                return foundScrollView
+            }
+        }
+        return nil
+    }
+
+    @objc private func handlePanGesture(_ gesture: UIPanGestureRecognizer) {
         guard isDrawingEnabled, let page = pdfView.currentPage else { return }
 
         let location = gesture.location(in: pdfView)
@@ -310,7 +276,6 @@ private func setupFloatingBar() {
 
         switch gesture.state {
         case .began:
-            // Clear any previous incomplete drawing
             if currentAnnotation != nil {
                 page.removeAnnotation(currentAnnotation!)
             }
@@ -329,9 +294,7 @@ private func setupFloatingBar() {
             border.lineWidth = penThickness
             currentAnnotation?.border = border
 
-            // Prevent multiple touches
             gesture.cancelsTouchesInView = true
-
 
         case .changed:
             guard let path = currentPath, let annotation = currentAnnotation else { return }
@@ -340,7 +303,6 @@ private func setupFloatingBar() {
             annotation.add(path)
 
             if let page = pdfView.currentPage {
-                // Remove previous annotation to avoid duplicates
                 page.removeAnnotation(annotation)
                 page.addAnnotation(annotation)
             }
@@ -351,10 +313,7 @@ private func setupFloatingBar() {
             guard let page = pdfView.currentPage,
                   let annotation = currentAnnotation else { return }
 
-            // Ensure the final annotation is added
             page.addAnnotation(annotation)
-
-            // Reset drawing state
             currentAnnotation = nil
             currentPath = nil
 
@@ -362,14 +321,14 @@ private func setupFloatingBar() {
             break
         }
     }
-
+    
     @objc private func openColorPicker() {
         let colorPicker = UIColorPickerViewController()
         colorPicker.selectedColor = penColor
         colorPicker.delegate = self
         present(colorPicker, animated: true, completion: nil)
     }
-
+    
     @objc private func openPenSizeSlider() {
         let alert = UIAlertController(title: "Pen Size", message: "\n\n\n", preferredStyle: .alert)
         let slider = UISlider(frame: CGRect(x: 10, y: 50, width: 250, height: 20))
@@ -383,53 +342,41 @@ private func setupFloatingBar() {
         alert.addAction(okAction)
         present(alert, animated: true, completion: nil)
     }
-
+    
     @objc private func updatePenSize(_ sender: UISlider) {
         penThickness = CGFloat(sender.value)
     }
-
-@objc private func savePDF() {
-    sendLogToFlutter("Save PDF button tapped")
-
-    guard let document = pdfView.document else {
-        sendLogToFlutter("No PDF document found to save")
-        completion?(nil)
-        dismiss(animated: true, completion: nil)
-        return
-    }
-
-    do {
-        // Explicitly capture self
-        try document.write(to: self.saveURL)
-        self.sendLogToFlutter("PDF successfully saved at \(self.saveURL.path)")
-
-        dismiss(animated: true) {
-            self.completion?(self.saveURL.path)
+    
+    @objc private func savePDF() {
+        guard let document = pdfView.document else {
+            completion(nil)
+            dismiss(animated: true, completion: nil)
+            return
         }
-    } catch {
-        self.sendLogToFlutter("Error saving PDF: \(error.localizedDescription)")
-        dismiss(animated: true) {
-            self.completion?(nil)
+
+        do {
+            try document.write(to: saveURL)
+            dismiss(animated: true) {
+                self.completion(self.saveURL.path)
+            }
+        } catch {
+            dismiss(animated: true) {
+                self.completion(nil)
+            }
         }
     }
-}
-
-
-    private func sendLogToFlutter(_ message: String) {
-        logChannel?.invokeMethod("log", arguments: message)
-    }
-
+    
     @objc private func dismissViewController() {
         dismiss(animated: true) {
-            self.completion?(nil)
+            self.completion(nil)
         }
     }
-
+    
     // UIColorPickerViewControllerDelegate
     func colorPickerViewControllerDidFinish(_ viewController: UIColorPickerViewController) {
         penColor = viewController.selectedColor
     }
-
+    
     func colorPickerViewControllerDidSelectColor(_ viewController: UIColorPickerViewController) {
         penColor = viewController.selectedColor
     }
