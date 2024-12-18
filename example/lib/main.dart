@@ -38,14 +38,7 @@ class _MyAppState extends State<MyApp> {
                 filePath: result.files.single.path!,
                 savePath: result.files.single.path!.replaceAll('.pdf', '_annotated.pdf'),
                 onFileSaved: (path) async {
-                  await FlutterPdfAnnotations.openPDF(
-                    filePath: result.files.single.path!.replaceAll('.pdf', '_annotated.pdf'),
-                    savePath: result.files.single.path!.replaceAll('.pdf', '_annotated.pdf'),
-                    onFileSaved: (path) async {
-                      log('PDF saved at: $path');
-
-                    },
-                  );
+                 log('File saved at: $path');
                 },
               );
             }
