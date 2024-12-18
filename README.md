@@ -22,7 +22,8 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  flutter_pdf_annotations: ^1.0.0
+  flutter_pdf_annotations:
+    path: ../flutter_pdf_annotations
 ```
 
 ### Platform-specific setup
