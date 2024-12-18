@@ -1,6 +1,4 @@
 package com.dbs.flutter_pdf_annotations
-
-import android.content.res.ColorStateList
 import android.graphics.*
 import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
@@ -56,9 +54,6 @@ class PDFViewerActivity : AppCompatActivity() {
             isEnabled = false
         }
 
-        // Add the navigation buttons
-        val buttonsContainer = createNavigationButtons()
-
         toolbarView = FloatingToolbar(this).apply {
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -85,10 +80,12 @@ class PDFViewerActivity : AppCompatActivity() {
             }
         }
 
+        val buttonsLayout = createNavigationButtons()
+
         mainLayout.addView(scrollView)
         mainLayout.addView(drawingView)
         mainLayout.addView(toolbarView)
-        mainLayout.addView(buttonsContainer)
+        mainLayout.addView(buttonsLayout)
 
         setContentView(mainLayout)
 
@@ -113,70 +110,63 @@ class PDFViewerActivity : AppCompatActivity() {
             elevation = 8f
             setPadding(16, 16, 16, 16)
 
-            // Previous button
-            addNavigationButton(
-                "Previous",
-                R.drawable.ic_arrow_back,
-                { saveCurrentPageAnnotations(); showPreviousPage() }
-            )
+            Button(context).apply {
+                text = "Previous"
+                setOnClickListener {
+                    saveCurrentPageAnnotations()
+                    showPreviousPage()
+                }
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    marginEnd = 8
+                }
+                addView(this)
+            }
 
-            // Next button
-            addNavigationButton(
-                "Next",
-                R.drawable.ic_arrow_forward,
-                { saveCurrentPageAnnotations(); showNextPage() }
-            )
+            Button(context).apply {
+                text = "Next"
+                setOnClickListener {
+                    saveCurrentPageAnnotations()
+                    showNextPage()
+                }
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    marginEnd = 8
+                }
+                addView(this)
+            }
 
-            // Add spacer
             Space(context).apply {
                 layoutParams = LinearLayout.LayoutParams(0, 0, 1f)
             }.also { addView(it) }
 
-            // Save button
-            addActionButton("Save", R.drawable.ic_save, { saveAndFinish() })
-
-            // Cancel button
-            addActionButton("Cancel", R.drawable.ic_close, { finish() })
-        }
-    }
-
-    private fun LinearLayout.addNavigationButton(text: String, iconRes: Int, onClick: () -> Unit) {
-        Button(context).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply {
-                marginEnd = 8
+            Button(context).apply {
+                text = "Save"
+                setOnClickListener { saveAndFinish() }
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    marginStart = 8
+                }
+                addView(this)
             }
-            setCompoundDrawablesWithIntrinsicBounds(iconRes, 0, 0, 0)
-            setText(text)
-            setTextColor(Color.BLACK)
-            background = null
-            compoundDrawablePadding = 8
-            setOnClickListener { onClick() }
-            addView(this)
-        }
-    }
 
-    private fun LinearLayout.addActionButton(text: String, iconRes: Int, onClick: () -> Unit) {
-        Button(context).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply {
-                marginStart = 8
+            Button(context).apply {
+                text = "Cancel"
+                setOnClickListener { finish() }
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    marginStart = 8
+                }
+                addView(this)
             }
-            setCompoundDrawablesWithIntrinsicBounds(iconRes, 0, 0, 0)
-            setText(text)
-            setTextColor(Color.WHITE)
-            backgroundTintList = ColorStateList.valueOf(
-                if (text == "Save") Color.parseColor("#4CAF50")  // Green for save
-                else Color.parseColor("#F44336")  // Red for cancel
-            )
-            elevation = 4f
-            compoundDrawablePadding = 8
-            setOnClickListener { onClick() }
-            addView(this)
         }
     }
 
@@ -196,7 +186,6 @@ class PDFViewerActivity : AppCompatActivity() {
             val descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
             pdfRenderer = PdfRenderer(descriptor)
             pageCount = pdfRenderer?.pageCount ?: 0
-
             pdfDocument = PdfDocument()
         } catch (e: Exception) {
             finishWithError("Error opening PDF: ${e.message}")
@@ -208,7 +197,6 @@ class PDFViewerActivity : AppCompatActivity() {
 
         try {
             saveCurrentPageAnnotations()
-
             currentPage?.close()
             currentBitmap?.recycle()
 
@@ -224,7 +212,6 @@ class PDFViewerActivity : AppCompatActivity() {
                         val canvas = Canvas(bitmap)
                         page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
 
-                        // Draw existing annotations
                         currentPageAnnotations[pageIndex]?.forEach { annotationData ->
                             val paint = Paint().apply {
                                 color = annotationData.color
@@ -303,7 +290,6 @@ class PDFViewerActivity : AppCompatActivity() {
                     page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                     documentPage.canvas.drawBitmap(bitmap, 0f, 0f, null)
 
-                    // Draw annotations with preserved properties
                     currentPageAnnotations[i]?.forEach { annotationData ->
                         val paint = Paint().apply {
                             color = annotationData.color
@@ -320,22 +306,38 @@ class PDFViewerActivity : AppCompatActivity() {
                 }
             }
 
-            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            val outputFileName = "annotated_${System.currentTimeMillis()}.pdf"
-            val outputFile = File(downloadsDir, outputFileName)
+            val savePath = intent.getStringExtra("savePath")
+            if (savePath.isNullOrBlank()) {
+                Toast.makeText(this, "Error: Save path not provided", Toast.LENGTH_LONG).show()
+                FlutterPdfAnnotationsPlugin.notifySaveResult(null)
+                finish()
+                return
+            }
+
+            val outputFile = File(savePath).absoluteFile
+            outputFile.parentFile?.mkdirs()
+
+            if (!outputFile.parentFile?.canWrite()!!) {
+                Toast.makeText(this, "Error: Cannot write to specified directory", Toast.LENGTH_LONG).show()
+                FlutterPdfAnnotationsPlugin.notifySaveResult(null)
+                finish()
+                return
+            }
 
             FileOutputStream(outputFile).use { out ->
                 document.writeTo(out)
             }
             document.close()
 
-            Toast.makeText(this, "PDF saved to Downloads: $outputFileName", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "PDF saved successfully!", Toast.LENGTH_LONG).show()
             FlutterPdfAnnotationsPlugin.notifySaveResult(outputFile.absolutePath)
             finish()
 
         } catch (e: Exception) {
-            Toast.makeText(this, "Error saving PDF: ${e.message}", Toast.LENGTH_SHORT).show()
+            val errorMessage = "Error saving PDF: ${e.message}"
+            Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show()
             FlutterPdfAnnotationsPlugin.notifySaveResult(null)
+            finish()
         }
     }
 
