@@ -1,4 +1,6 @@
 PODS:
+  - device_info_plus (0.0.1):
+    - Flutter
   - DKImagePickerController/Core (4.3.9):
     - DKImagePickerController/ImageDataManager
     - DKImagePickerController/Resource
@@ -30,6 +32,8 @@ PODS:
   - DKPhotoGallery/Resource (0.0.19):
     - SDWebImage
     - SwiftyGif
+  - easy_pdf_viewer (1.0.8):
+    - Flutter
   - file_picker (0.0.1):
     - DKImagePickerController/PhotoGallery
     - Flutter
@@ -41,22 +45,39 @@ PODS:
     - Toast
   - integration_test (0.0.1):
     - Flutter
-  - path_provider_foundation (0.0.1):
+  - open_file_ios (0.0.1):
     - Flutter
-    - FlutterMacOS
+  - path_provider (0.0.1):
+    - Flutter
+  - printing (1.0.0):
+    - Flutter
   - SDWebImage (5.19.2):
     - SDWebImage/Core (= 5.19.2)
   - SDWebImage/Core (5.19.2)
+  - sqflite_darwin (0.0.4):
+    - Flutter
+    - FlutterMacOS
   - SwiftyGif (5.4.5)
+  - syncfusion_flutter_pdfviewer (0.0.1):
+    - Flutter
   - Toast (4.1.1)
+  - url_launcher_ios (0.0.1):
+    - Flutter
 
 DEPENDENCIES:
+  - device_info_plus (from `.symlinks/plugins/device_info_plus/ios`)
+  - easy_pdf_viewer (from `.symlinks/plugins/easy_pdf_viewer/ios`)
   - file_picker (from `.symlinks/plugins/file_picker/ios`)
   - Flutter (from `Flutter`)
   - flutter_pdf_annotations (from `.symlinks/plugins/flutter_pdf_annotations/ios`)
   - fluttertoast (from `.symlinks/plugins/fluttertoast/ios`)
   - integration_test (from `.symlinks/plugins/integration_test/ios`)
-  - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
+  - open_file_ios (from `.symlinks/plugins/open_file_ios/ios`)
+  - path_provider (from `.symlinks/plugins/path_provider/ios`)
+  - printing (from `.symlinks/plugins/printing/ios`)
+  - sqflite_darwin (from `.symlinks/plugins/sqflite_darwin/darwin`)
+  - syncfusion_flutter_pdfviewer (from `.symlinks/plugins/syncfusion_flutter_pdfviewer/ios`)
+  - url_launcher_ios (from `.symlinks/plugins/url_launcher_ios/ios`)
 
 SPEC REPOS:
   trunk:
@@ -67,6 +88,10 @@ SPEC REPOS:
     - Toast
 
 EXTERNAL SOURCES:
+  device_info_plus:
+    :path: ".symlinks/plugins/device_info_plus/ios"
+  easy_pdf_viewer:
+    :path: ".symlinks/plugins/easy_pdf_viewer/ios"
   file_picker:
     :path: ".symlinks/plugins/file_picker/ios"
   Flutter:
@@ -77,21 +102,38 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/fluttertoast/ios"
   integration_test:
     :path: ".symlinks/plugins/integration_test/ios"
-  path_provider_foundation:
-    :path: ".symlinks/plugins/path_provider_foundation/darwin"
+  open_file_ios:
+    :path: ".symlinks/plugins/open_file_ios/ios"
+  path_provider:
+    :path: ".symlinks/plugins/path_provider/ios"
+  printing:
+    :path: ".symlinks/plugins/printing/ios"
+  sqflite_darwin:
+    :path: ".symlinks/plugins/sqflite_darwin/darwin"
+  syncfusion_flutter_pdfviewer:
+    :path: ".symlinks/plugins/syncfusion_flutter_pdfviewer/ios"
+  url_launcher_ios:
+    :path: ".symlinks/plugins/url_launcher_ios/ios"
 
 SPEC CHECKSUMS:
+  device_info_plus: 97af1d7e84681a90d0693e63169a5d50e0839a0d
   DKImagePickerController: 946cec48c7873164274ecc4624d19e3da4c1ef3c
   DKPhotoGallery: b3834fecb755ee09a593d7c9e389d8b5d6deed60
+  easy_pdf_viewer: 92a716add4c1703a35e1734979caa7c689dcddd5
   file_picker: 09aa5ec1ab24135ccd7a1621c46c84134bfd6655
   Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
   flutter_pdf_annotations: 00312c6b5a70ac1842c552d5061f4772db7b16fb
   fluttertoast: e9a18c7be5413da53898f660530c56f35edfba9c
   integration_test: 252f60fa39af5e17c3aa9899d35d908a0721b573
-  path_provider_foundation: 2b6b4c569c0fb62ec74538f866245ac84301af46
+  open_file_ios: 461db5853723763573e140de3193656f91990d9e
+  path_provider: abfe2b5c733d04e238b0d8691db0cfd63a27a93c
+  printing: 233e1b73bd1f4a05615548e9b5a324c98588640b
   SDWebImage: dfe95b2466a9823cf9f0c6d01217c06550d7b29a
+  sqflite_darwin: 5a7236e3b501866c1c9befc6771dfd73ffb8702d
   SwiftyGif: 706c60cf65fa2bc5ee0313beece843c8eb8194d4
+  syncfusion_flutter_pdfviewer: bb9998884b864cfedf72628df3503bdf57e397c0
   Toast: 1f5ea13423a1e6674c4abdac5be53587ae481c4e
+  url_launcher_ios: 5334b05cef931de560670eeae103fd3e431ac3fe
 
 PODFILE CHECKSUM: 1959d098c91d8a792531a723c4a9d7e9f6a01e38
 

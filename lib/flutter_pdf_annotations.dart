@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 
 class FlutterPdfAnnotations {
@@ -13,7 +12,7 @@ class FlutterPdfAnnotations {
   /// Open PDF for annotation
   static Future<void> openPDF({
     required String filePath,
-    String? savePath,
+    required String savePath,
     required void Function(String?) onFileSaved,
   }) async {
     try {
@@ -25,11 +24,9 @@ class FlutterPdfAnnotations {
       }
 
       // If no save path provided, create one in app documents directory
-      final String finalSavePath =
-          savePath ?? await _getDefaultSavePath(filePath);
 
       // Ensure the directory exists
-      final saveDir = Directory(path.dirname(finalSavePath));
+      final saveDir = Directory(path.dirname(savePath));
       if (!saveDir.existsSync()) {
         saveDir.createSync(recursive: true);
       }
@@ -44,9 +41,8 @@ class FlutterPdfAnnotations {
 
       await _channel.invokeMethod('openPDF', {
         'filePath': filePath,
-        'savePath': finalSavePath,
+        'savePath': savePath,
       });
-
     } catch (e) {
       _showToast("Error opening PDF: $e");
       onFileSaved(null);
@@ -58,7 +54,6 @@ class FlutterPdfAnnotations {
     try {
       onFileSaved(result);
       _showToast("PDF saved at: $result");
-
     } catch (e) {
       _showToast("Error processing save result");
       onFileSaved(null);
@@ -74,13 +69,5 @@ class FlutterPdfAnnotations {
         backgroundColor: Colors.black87,
         textColor: Colors.white,
         fontSize: 16.0);
-  }
-
-  static Future<String> _getDefaultSavePath(String sourceFilePath) async {
-    final directory = await getApplicationDocumentsDirectory();
-    final fileName = path.basename(sourceFilePath);
-    final newFileName =
-        'annotated_${DateTime.now().millisecondsSinceEpoch}_$fileName';
-    return path.join(directory.path, newFileName);
   }
 }
