@@ -23,7 +23,8 @@ Add this to your package's `pubspec.yaml` file:
 ```yaml
 dependencies:
   flutter_pdf_annotations:
-    path: ../flutter_pdf_annotations
+    git:
+      url:https://github.com/moghoneim-code/flutter_pdf_annotations.git
 ```
 
 ### Platform-specific setup
