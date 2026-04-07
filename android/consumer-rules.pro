@@ -1,0 +1,3 @@
+-keep class com.dbs.flutter_pdf_annotations.** { *; }
+-keepnames class com.dbs.flutter_pdf_annotations.** { *; }
+-keepclassmembers class com.dbs.flutter_pdf_annotations.** { *; }

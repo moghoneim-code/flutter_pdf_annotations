@@ -64,21 +64,22 @@ class FlutterPdfAnnotationsPlugin : FlutterPlugin, MethodCallHandler, ActivityAw
 
       Log.d(TAG, "Opening PDF - File Path: $filePath, Save Path: $savePath")
 
-      if (filePath == null) {
-        Log.e(TAG, "File path is null")
-        result.error("INVALID_ARGUMENT", "File path cannot be null", null)
-        return
-      }
-
-      if (savePath == null) {
-        Log.e(TAG, "Save path is null")
-        result.error("INVALID_ARGUMENT", "Save path cannot be null", null)
+      if (filePath == null || savePath == null) {
+        result.error("INVALID_ARGUMENT", "filePath and savePath are required", null)
         return
       }
 
       val intent = Intent(context, PDFViewerActivity::class.java).apply {
         putExtra("filePath", filePath)
         putExtra("savePath", savePath)
+        // Optional config
+        call.argument<String>("title")?.let { putExtra("title", it) }
+        colorArgFromCall(call, "initialPenColor")?.let { putExtra("initialPenColor", it) }
+        colorArgFromCall(call, "initialHighlightColor")?.let { putExtra("initialHighlightColor", it) }
+        call.argument<Double>("initialStrokeWidth")?.let { putExtra("initialStrokeWidth", it.toFloat()) }
+        call.argument<List<String>>("imagePaths")?.let {
+          putStringArrayListExtra("imagePaths", ArrayList(it))
+        }
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       }
 
@@ -88,6 +89,15 @@ class FlutterPdfAnnotationsPlugin : FlutterPlugin, MethodCallHandler, ActivityAw
     } catch (e: Exception) {
       Log.e(TAG, "Error opening PDF: ${e.message}", e)
       result.error("ERROR", "Failed to open PDF: ${e.message}", null)
+    }
+  }
+
+  /** Reads a color value that may arrive as Int or Long (Dart int encoding). */
+  private fun colorArgFromCall(call: MethodCall, key: String): Int? {
+    return when (val raw = call.argument<Any>(key)) {
+      is Int -> raw
+      is Long -> raw.toInt()
+      else -> null
     }
   }
 
