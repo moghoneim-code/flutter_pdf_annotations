@@ -9,6 +9,7 @@ import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
+import android.util.TypedValue
 import android.view.*
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
@@ -49,6 +50,9 @@ class PDFViewerActivity : AppCompatActivity() {
     private lateinit var imageActionContent: LinearLayout
     private var activeImageView: DrawingView? = null
 
+    // Progress overlay for save
+    private var progressOverlay: FrameLayout? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -57,16 +61,18 @@ class PDFViewerActivity : AppCompatActivity() {
 
         applyIntentConfig()
 
-        val topBarHeight = dpToPx(56)
-        val bottomBarHeight = dpToPx(72)
+        val topBarHeight = dpToPx(52)
+        val bottomBarHeight = dpToPx(64)
 
         val mainLayout = FrameLayout(this)
+        mainLayout.setBackgroundColor(Color.parseColor("#F5F5F5"))
 
         scrollView = LockableScrollView(this)
         scrollView.layoutParams = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         )
+        scrollView.setBackgroundColor(Color.parseColor("#EEEEEE"))
 
         pdfContainer = LinearLayout(this)
         pdfContainer.orientation = LinearLayout.VERTICAL
@@ -123,15 +129,23 @@ class PDFViewerActivity : AppCompatActivity() {
     /** Show Apply/Delete bar; hide normal tools. */
     private fun showImageActions(dv: DrawingView) {
         activeImageView = dv
-        normalBarContent.visibility = View.GONE
-        imageActionContent.visibility = View.VISIBLE
+        normalBarContent.animate().alpha(0f).setDuration(150).withEndAction {
+            normalBarContent.visibility = View.GONE
+            imageActionContent.visibility = View.VISIBLE
+            imageActionContent.alpha = 0f
+            imageActionContent.animate().alpha(1f).setDuration(150).start()
+        }.start()
     }
 
     /** Restore normal tools bar. */
     private fun hideImageActions() {
         activeImageView = null
-        normalBarContent.visibility = View.VISIBLE
-        imageActionContent.visibility = View.GONE
+        imageActionContent.animate().alpha(0f).setDuration(150).withEndAction {
+            imageActionContent.visibility = View.GONE
+            normalBarContent.visibility = View.VISIBLE
+            normalBarContent.alpha = 0f
+            normalBarContent.animate().alpha(1f).setDuration(150).start()
+        }.start()
     }
 
     private fun buildTopBar(title: String = "PDF Annotations"): LinearLayout {
@@ -139,13 +153,14 @@ class PDFViewerActivity : AppCompatActivity() {
         bar.orientation = LinearLayout.HORIZONTAL
         bar.gravity = Gravity.CENTER_VERTICAL
         bar.setBackgroundColor(Color.WHITE)
-        bar.elevation = dpToPx(4).toFloat()
-        bar.setPadding(dpToPx(8), dpToPx(8), dpToPx(8), dpToPx(8))
+        bar.elevation = dpToPx(2).toFloat()
+        bar.setPadding(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(8))
 
         val cancelBtn = Button(this)
         cancelBtn.text = "Cancel"
         cancelBtn.setTextColor(Color.parseColor("#2196F3"))
         cancelBtn.background = null
+        cancelBtn.isAllCaps = false
         cancelBtn.setOnClickListener { finish() }
         bar.addView(cancelBtn, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -154,16 +169,18 @@ class PDFViewerActivity : AppCompatActivity() {
 
         val titleView = TextView(this)
         titleView.text = title
-        titleView.textSize = 16f
-        titleView.setTextColor(Color.BLACK)
+        titleView.textSize = 17f
+        titleView.setTextColor(Color.parseColor("#212121"))
         titleView.gravity = Gravity.CENTER
+        titleView.setTypeface(null, android.graphics.Typeface.BOLD)
         bar.addView(titleView, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
         val shareBtn = ImageButton(this)
         shareBtn.setImageResource(android.R.drawable.ic_menu_share)
         shareBtn.background = null
+        shareBtn.setColorFilter(Color.parseColor("#2196F3"))
         shareBtn.setOnClickListener { shareAndSave() }
-        val shareLp = LinearLayout.LayoutParams(dpToPx(48), dpToPx(48))
+        val shareLp = LinearLayout.LayoutParams(dpToPx(44), dpToPx(44))
         shareLp.marginEnd = dpToPx(4)
         bar.addView(shareBtn, shareLp)
 
@@ -178,54 +195,90 @@ class PDFViewerActivity : AppCompatActivity() {
     private fun buildBottomBar(): FrameLayout {
         val container = FrameLayout(this)
         container.setBackgroundColor(Color.WHITE)
-        container.elevation = dpToPx(8).toFloat()
+        container.elevation = dpToPx(4).toFloat()
 
         // ── Normal tools ──────────────────────────────────────────────────────
         normalBarContent = LinearLayout(this)
         normalBarContent.orientation = LinearLayout.HORIZONTAL
         normalBarContent.gravity = Gravity.CENTER_VERTICAL
-        normalBarContent.setPadding(dpToPx(2), dpToPx(8), dpToPx(2), dpToPx(8))
+        normalBarContent.setPadding(dpToPx(4), dpToPx(6), dpToPx(4), dpToPx(6))
+
+        // Row 1: annotation tools
+        val toolsRow = LinearLayout(this)
+        toolsRow.orientation = LinearLayout.HORIZONTAL
+        toolsRow.gravity = Gravity.CENTER_VERTICAL
 
         drawBtn = makeToolButton("Draw", android.R.drawable.ic_menu_edit) { toggleMode(AnnotationMode.DRAW) }
-        highlightBtn = makeToolButton("Highlight", android.R.drawable.ic_menu_crop) { toggleMode(AnnotationMode.HIGHLIGHT) }
-        eraserBtn = makeToolButton("Eraser", android.R.drawable.ic_menu_close_clear_cancel) { toggleMode(AnnotationMode.ERASE) }
+        highlightBtn = makeToolButton("Mark", android.R.drawable.ic_menu_crop) { toggleMode(AnnotationMode.HIGHLIGHT) }
+        eraserBtn = makeToolButton("Erase", android.R.drawable.ic_menu_close_clear_cancel) { toggleMode(AnnotationMode.ERASE) }
 
-        normalBarContent.addView(drawBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.2f))
-        normalBarContent.addView(highlightBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.2f))
-        normalBarContent.addView(eraserBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.2f))
+        toolsRow.addView(drawBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        toolsRow.addView(highlightBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        toolsRow.addView(eraserBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
         if (availableImages.isNotEmpty()) {
             val btn = makeToolButton("Image", android.R.drawable.ic_menu_gallery) { toggleMode(AnnotationMode.IMAGE) }
             imageBtn = btn
-            normalBarContent.addView(btn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.2f))
+            toolsRow.addView(btn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
 
+        normalBarContent.addView(toolsRow, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 3f))
+
+        // Separator
+        val sep1 = View(this)
+        sep1.setBackgroundColor(Color.parseColor("#E0E0E0"))
+        normalBarContent.addView(sep1, LinearLayout.LayoutParams(dpToPx(1), dpToPx(32)).apply {
+            marginStart = dpToPx(4); marginEnd = dpToPx(4)
+        })
+
+        // Color swatch
         colorSwatch = View(this)
-        val swatchSize = dpToPx(36)
+        val swatchSize = dpToPx(32)
         val swatchLp = LinearLayout.LayoutParams(swatchSize, swatchSize)
         swatchLp.gravity = Gravity.CENTER_VERTICAL
-        swatchLp.marginStart = dpToPx(4)
-        swatchLp.marginEnd = dpToPx(4)
+        swatchLp.marginStart = dpToPx(2)
+        swatchLp.marginEnd = dpToPx(2)
         colorSwatch.layoutParams = swatchLp
         val swatchBg = GradientDrawable()
         swatchBg.shape = GradientDrawable.OVAL
         swatchBg.setColor(currentColor)
+        swatchBg.setStroke(dpToPx(2), Color.parseColor("#BDBDBD"))
         colorSwatch.background = swatchBg
         colorSwatch.isClickable = true
         colorSwatch.setOnClickListener { showColorPicker() }
         normalBarContent.addView(colorSwatch)
 
+        // Size buttons
+        val sizeContainer = LinearLayout(this)
+        sizeContainer.orientation = LinearLayout.HORIZONTAL
+        sizeContainer.gravity = Gravity.CENTER_VERTICAL
         sizeSmallBtn = makeSizeButton("S", 3f)
         sizeMediumBtn = makeSizeButton("M", 8f)
         sizeLargeBtn = makeSizeButton("L", 18f)
-        normalBarContent.addView(sizeSmallBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.7f))
-        normalBarContent.addView(sizeMediumBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.7f))
-        normalBarContent.addView(sizeLargeBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.7f))
+        sizeContainer.addView(sizeSmallBtn, LinearLayout.LayoutParams(dpToPx(28), dpToPx(28)).apply { marginEnd = dpToPx(2) })
+        sizeContainer.addView(sizeMediumBtn, LinearLayout.LayoutParams(dpToPx(28), dpToPx(28)).apply { marginEnd = dpToPx(2) })
+        sizeContainer.addView(sizeLargeBtn, LinearLayout.LayoutParams(dpToPx(28), dpToPx(28)))
+        normalBarContent.addView(sizeContainer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            marginStart = dpToPx(2); marginEnd = dpToPx(2)
+        })
+
         updateSizeButtons(when {
             currentStrokeWidth <= 4f -> "S"
             currentStrokeWidth >= 14f -> "L"
             else -> "M"
         })
+
+        // Separator
+        val sep2 = View(this)
+        sep2.setBackgroundColor(Color.parseColor("#E0E0E0"))
+        normalBarContent.addView(sep2, LinearLayout.LayoutParams(dpToPx(1), dpToPx(32)).apply {
+            marginStart = dpToPx(2); marginEnd = dpToPx(4)
+        })
+
+        // Action buttons (undo, clear, save)
+        val actionsRow = LinearLayout(this)
+        actionsRow.orientation = LinearLayout.HORIZONTAL
+        actionsRow.gravity = Gravity.CENTER_VERTICAL
 
         val undoBtn = makeToolButton("Undo", android.R.drawable.ic_menu_revert) {
             if (undoStack.isNotEmpty()) {
@@ -233,7 +286,7 @@ class PDFViewerActivity : AppCompatActivity() {
                 drawingViews.getOrNull(pageIdx)?.undo()
             }
         }
-        normalBarContent.addView(undoBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        actionsRow.addView(undoBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
         val clearBtn = makeToolButton("Clear", android.R.drawable.ic_menu_delete) {
             AlertDialog.Builder(this)
@@ -243,46 +296,132 @@ class PDFViewerActivity : AppCompatActivity() {
                 .setNegativeButton("Cancel", null)
                 .show()
         }
-        normalBarContent.addView(clearBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        actionsRow.addView(clearBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
+        normalBarContent.addView(actionsRow, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.2f))
+
+        // Save button
         val saveBtn = Button(this)
         saveBtn.text = "Save"
         saveBtn.setTextColor(Color.WHITE)
-        saveBtn.setBackgroundColor(Color.parseColor("#2196F3"))
+        saveBtn.isAllCaps = false
+        val saveBg = GradientDrawable()
+        saveBg.cornerRadius = dpToPx(8).toFloat()
+        saveBg.setColor(Color.parseColor("#2196F3"))
+        saveBtn.background = saveBg
+        saveBtn.setPadding(dpToPx(12), dpToPx(4), dpToPx(12), dpToPx(4))
         saveBtn.setOnClickListener { saveAndFinish() }
-        normalBarContent.addView(saveBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.2f))
+        normalBarContent.addView(saveBtn, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dpToPx(40)).apply {
+            marginStart = dpToPx(4); marginEnd = dpToPx(2)
+        })
 
         container.addView(normalBarContent, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
-        // ── Image action bar (Apply / Delete) ─────────────────────────────────
+        // ── Image action toolbar ───────────────────────────��────────────────
         imageActionContent = LinearLayout(this)
-        imageActionContent.orientation = LinearLayout.HORIZONTAL
-        imageActionContent.gravity = Gravity.CENTER_VERTICAL
-        imageActionContent.setPadding(dpToPx(24), dpToPx(10), dpToPx(24), dpToPx(10))
+        imageActionContent.orientation = LinearLayout.VERTICAL
+        imageActionContent.gravity = Gravity.CENTER_HORIZONTAL
+        imageActionContent.setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6))
         imageActionContent.visibility = View.GONE
 
+        // Hint text
+        val hintTv = TextView(this)
+        hintTv.text = "Drag to move · Corners to resize · Pinch to scale"
+        hintTv.textSize = 10f
+        hintTv.setTextColor(Color.parseColor("#9E9E9E"))
+        hintTv.gravity = Gravity.CENTER
+        imageActionContent.addView(hintTv, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dpToPx(6) })
+
+        // Button row
+        val btnRow = LinearLayout(this)
+        btnRow.orientation = LinearLayout.HORIZONTAL
+        btnRow.gravity = Gravity.CENTER_VERTICAL
+
+        // Aspect Ratio lock toggle
+        val aspectBtn = Button(this)
+        aspectBtn.textSize = 12f
+        aspectBtn.isAllCaps = false
+        aspectBtn.setPadding(dpToPx(12), dpToPx(4), dpToPx(12), dpToPx(4))
+        fun updateAspectBtn(locked: Boolean) {
+            aspectBtn.text = if (locked) "Aspect: Locked" else "Aspect: Free"
+            val bg = GradientDrawable()
+            bg.cornerRadius = dpToPx(8).toFloat()
+            if (locked) {
+                bg.setColor(Color.parseColor("#E3F2FD"))
+                bg.setStroke(dpToPx(1), Color.parseColor("#2196F3"))
+                aspectBtn.setTextColor(Color.parseColor("#2196F3"))
+            } else {
+                bg.setColor(Color.parseColor("#FFF3E0"))
+                bg.setStroke(dpToPx(1), Color.parseColor("#FF9800"))
+                aspectBtn.setTextColor(Color.parseColor("#FF9800"))
+            }
+            aspectBtn.background = bg
+        }
+        updateAspectBtn(false)
+        aspectBtn.setOnClickListener {
+            val newLocked = !(activeImageView?.aspectRatioLocked ?: false)
+            drawingViews.forEach { it.aspectRatioLocked = newLocked }
+            updateAspectBtn(newLocked)
+        }
+        btnRow.addView(aspectBtn, LinearLayout.LayoutParams(0, dpToPx(36), 1f).apply { marginEnd = dpToPx(8) })
+
+        // Confirm (apply) button
         val applyBtn = Button(this)
-        applyBtn.text = "✓  Apply"
-        applyBtn.textSize = 16f
+        applyBtn.text = "Confirm"
+        applyBtn.textSize = 13f
         applyBtn.setTextColor(Color.WHITE)
-        applyBtn.setBackgroundColor(Color.parseColor("#4CAF50"))
+        applyBtn.isAllCaps = false
+        val applyBg = GradientDrawable()
+        applyBg.cornerRadius = dpToPx(8).toFloat()
+        applyBg.setColor(Color.parseColor("#4CAF50"))
+        applyBtn.background = applyBg
+        applyBtn.setPadding(dpToPx(14), dpToPx(4), dpToPx(14), dpToPx(4))
         applyBtn.setOnClickListener {
             activeImageView?.acceptSelectedImage()
+            // Exit image mode and release scroll lock
+            annotationMode = AnnotationMode.NONE
+            scrollView.scrollingEnabled = true
+            drawingViews.forEach { dv ->
+                dv.isEnabled = false
+                dv.pendingImageBitmap = null
+                dv.isImagePlacementMode = false
+            }
+            imageBtn?.let { updateToolButtonState(it, false, Color.parseColor("#4CAF50")) }
+            hideImageActions()
         }
-        val applyLp = LinearLayout.LayoutParams(0, dpToPx(52), 1f)
-        applyLp.marginEnd = dpToPx(16)
-        imageActionContent.addView(applyBtn, applyLp)
+        btnRow.addView(applyBtn, LinearLayout.LayoutParams(0, dpToPx(36), 1f).apply { marginEnd = dpToPx(8) })
 
+        // Delete button
         val deleteBtn = Button(this)
-        deleteBtn.text = "✕  Delete"
-        deleteBtn.textSize = 16f
+        deleteBtn.text = "Delete"
+        deleteBtn.textSize = 13f
         deleteBtn.setTextColor(Color.WHITE)
-        deleteBtn.setBackgroundColor(Color.parseColor("#F44336"))
+        deleteBtn.isAllCaps = false
+        val deleteBg = GradientDrawable()
+        deleteBg.cornerRadius = dpToPx(8).toFloat()
+        deleteBg.setColor(Color.parseColor("#F44336"))
+        deleteBtn.background = deleteBg
+        deleteBtn.setPadding(dpToPx(14), dpToPx(4), dpToPx(14), dpToPx(4))
         deleteBtn.setOnClickListener {
             activeImageView?.deleteSelectedImage()
+            // Exit image mode and release scroll lock
+            annotationMode = AnnotationMode.NONE
+            scrollView.scrollingEnabled = true
+            drawingViews.forEach { dv ->
+                dv.isEnabled = false
+                dv.pendingImageBitmap = null
+                dv.isImagePlacementMode = false
+            }
+            imageBtn?.let { updateToolButtonState(it, false, Color.parseColor("#4CAF50")) }
+            hideImageActions()
         }
-        imageActionContent.addView(deleteBtn, LinearLayout.LayoutParams(0, dpToPx(52), 1f))
+        btnRow.addView(deleteBtn, LinearLayout.LayoutParams(0, dpToPx(36), 1f))
+
+        imageActionContent.addView(btnRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         container.addView(imageActionContent, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -294,19 +433,19 @@ class PDFViewerActivity : AppCompatActivity() {
         val container = LinearLayout(this)
         container.orientation = LinearLayout.VERTICAL
         container.gravity = Gravity.CENTER
-        container.setPadding(dpToPx(2), dpToPx(2), dpToPx(2), dpToPx(2))
+        container.setPadding(dpToPx(2), dpToPx(4), dpToPx(2), dpToPx(2))
         container.setOnClickListener { onClick() }
 
         val icon = ImageView(this)
         icon.setImageResource(iconRes)
         icon.setColorFilter(Color.parseColor("#9E9E9E"))
-        val iconLp = LinearLayout.LayoutParams(dpToPx(20), dpToPx(20))
+        val iconLp = LinearLayout.LayoutParams(dpToPx(22), dpToPx(22))
         iconLp.gravity = Gravity.CENTER_HORIZONTAL
         container.addView(icon, iconLp)
 
         val text = TextView(this)
         text.text = label
-        text.textSize = 8f
+        text.textSize = 9f
         text.gravity = Gravity.CENTER
         text.setTextColor(Color.parseColor("#9E9E9E"))
         container.addView(text, LinearLayout.LayoutParams(
@@ -320,6 +459,9 @@ class PDFViewerActivity : AppCompatActivity() {
         btn.text = label
         btn.textSize = 11f
         btn.gravity = Gravity.CENTER
+        val bg = GradientDrawable()
+        bg.cornerRadius = dpToPx(6).toFloat()
+        btn.background = bg
         btn.setOnClickListener {
             currentStrokeWidth = strokeSize
             drawingViews.forEach { it.setStrokeWidth(strokeSize) }
@@ -330,11 +472,12 @@ class PDFViewerActivity : AppCompatActivity() {
 
     private fun updateSizeButtons(activeLabel: String) {
         listOf(sizeSmallBtn to "S", sizeMediumBtn to "M", sizeLargeBtn to "L").forEach { (btn, lbl) ->
+            val bg = btn.background as? GradientDrawable ?: GradientDrawable().also { btn.background = it }
             if (lbl == activeLabel) {
-                btn.setBackgroundColor(Color.parseColor("#009688"))
+                bg.setColor(Color.parseColor("#009688"))
                 btn.setTextColor(Color.WHITE)
             } else {
-                btn.setBackgroundColor(Color.TRANSPARENT)
+                bg.setColor(Color.TRANSPARENT)
                 btn.setTextColor(Color.parseColor("#009688"))
             }
         }
@@ -393,49 +536,53 @@ class PDFViewerActivity : AppCompatActivity() {
         val dialog = BottomSheetDialog(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16))
+            setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(24))
         }
 
         val titleTv = TextView(this).apply {
             text = "Select Image to Insert"
             textSize = 16f
-            setTextColor(Color.BLACK)
+            setTextColor(Color.parseColor("#212121"))
             gravity = Gravity.CENTER
+            setTypeface(null, Typeface.BOLD)
         }
         root.addView(titleTv, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dpToPx(12) })
+        ).apply { bottomMargin = dpToPx(16) })
 
         val scroll = HorizontalScrollView(this)
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
 
         var selectedBitmap: Bitmap? = null
 
-        val thumbSize = dpToPx(80)
+        val thumbSize = dpToPx(90)
         availableImages.forEachIndexed { idx, bmp ->
             val iv = ImageView(this).apply {
                 setImageBitmap(bmp)
                 scaleType = ImageView.ScaleType.CENTER_CROP
                 val bg = GradientDrawable().apply {
-                    cornerRadius = dpToPx(8).toFloat()
+                    cornerRadius = dpToPx(12).toFloat()
                     setColor(Color.parseColor("#F5F5F5"))
+                    setStroke(dpToPx(2), Color.parseColor("#E0E0E0"))
                 }
                 background = bg
                 clipToOutline = true
+                setPadding(dpToPx(4), dpToPx(4), dpToPx(4), dpToPx(4))
                 setOnClickListener { selectedBitmap = availableImages[idx]; dialog.dismiss() }
             }
-            row.addView(iv, LinearLayout.LayoutParams(thumbSize, thumbSize).apply { marginEnd = dpToPx(8) })
+            row.addView(iv, LinearLayout.LayoutParams(thumbSize, thumbSize).apply { marginEnd = dpToPx(12) })
         }
         scroll.addView(row)
         root.addView(scroll, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dpToPx(12) })
+        ).apply { bottomMargin = dpToPx(16) })
 
         val cancelTv = TextView(this).apply {
             text = "Cancel"
             textSize = 14f
             setTextColor(Color.parseColor("#2196F3"))
             gravity = Gravity.CENTER
+            setPadding(0, dpToPx(8), 0, dpToPx(8))
             setOnClickListener { dialog.dismiss() }
         }
         root.addView(cancelTv, LinearLayout.LayoutParams(
@@ -463,7 +610,7 @@ class PDFViewerActivity : AppCompatActivity() {
         if (active) {
             val bg = GradientDrawable()
             bg.cornerRadius = dpToPx(8).toFloat()
-            bg.setColor(Color.argb(31, Color.red(activeColor), Color.green(activeColor), Color.blue(activeColor)))
+            bg.setColor(Color.argb(25, Color.red(activeColor), Color.green(activeColor), Color.blue(activeColor)))
             container.background = bg
             iconView?.setColorFilter(activeColor)
             labelView?.setTextColor(activeColor)
@@ -498,14 +645,20 @@ class PDFViewerActivity : AppCompatActivity() {
             val displayWidth = resources.displayMetrics.widthPixels
             val frameHeight = (displayWidth.toFloat() * page.height / page.width).toInt()
 
-            val bitmap = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
+            // Render at display density for sharp output
+            val density = resources.displayMetrics.density.coerceAtMost(3f)
+            val renderWidth = (page.width * density).toInt()
+            val renderHeight = (page.height * density).toInt()
+
+            val bitmap = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888)
+            bitmap.eraseColor(Color.WHITE)
             page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
 
             val frameLayout = FrameLayout(this)
             pdfContainer.addView(
                 frameLayout,
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, frameHeight)
-                    .apply { bottomMargin = 8 }
+                    .apply { bottomMargin = dpToPx(4) }
             )
 
             val imageView = ImageView(this).apply {
@@ -533,7 +686,6 @@ class PDFViewerActivity : AppCompatActivity() {
             frameLayout.addView(imageView)
             frameLayout.addView(drawingView)
 
-            // Use explicit reference to avoid 'this' ambiguity inside nested lambda
             drawingView.onImageSelectionChanged = { selected ->
                 if (selected) showImageActions(drawingView)
                 else if (activeImageView == drawingView) hideImageActions()
@@ -572,7 +724,8 @@ class PDFViewerActivity : AppCompatActivity() {
                     val documentPage = document.startPage(pageInfo)
 
                     val bitmap = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
-                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    bitmap.eraseColor(Color.WHITE)
+                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
                     documentPage.canvas.drawBitmap(bitmap, 0f, 0f, null)
                     bitmap.recycle()
 
@@ -581,7 +734,7 @@ class PDFViewerActivity : AppCompatActivity() {
                     }
 
                     drawingViews.getOrNull(i)?.getImageAnnotations()?.forEach { img ->
-                        documentPage.canvas.drawBitmap(img.bitmap, null, img.rect, null)
+                        documentPage.canvas.drawBitmap(img.bitmap, null, img.rect, Paint().apply { isFilterBitmap = true })
                     }
 
                     drawingViews.getOrNull(i)?.getAnnotations()?.forEach { a ->
@@ -612,9 +765,32 @@ class PDFViewerActivity : AppCompatActivity() {
             finish(); return
         }
 
+        // Show progress indicator
+        val overlay = FrameLayout(this).apply {
+            setBackgroundColor(Color.argb(120, 255, 255, 255))
+            isClickable = true  // block touches
+        }
+        val progress = ProgressBar(this)
+        val progressLp = FrameLayout.LayoutParams(dpToPx(48), dpToPx(48))
+        progressLp.gravity = Gravity.CENTER
+        overlay.addView(progress, progressLp)
+        val label = TextView(this).apply {
+            text = "Saving..."
+            setTextColor(Color.parseColor("#424242"))
+            textSize = 14f
+            gravity = Gravity.CENTER
+        }
+        val labelLp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        labelLp.gravity = Gravity.CENTER
+        labelLp.topMargin = dpToPx(56)
+        overlay.addView(label, labelLp)
+        (window.decorView as? ViewGroup)?.addView(overlay)
+        progressOverlay = overlay
+
         CoroutineScope(Dispatchers.IO).launch {
             val pdfBytes = buildAnnotatedPdf()
             withContext(Dispatchers.Main) {
+                progressOverlay?.let { (window.decorView as? ViewGroup)?.removeView(it) }
                 if (pdfBytes == null) {
                     Toast.makeText(this@PDFViewerActivity, "Error building PDF", Toast.LENGTH_LONG).show()
                     FlutterPdfAnnotationsPlugin.notifySaveResult(null); finish(); return@withContext

@@ -36,11 +36,13 @@ private class ImageAnnotationOverlayView: UIView {
     var annotations: [ImagePDFAnnotation] = []
     var selectedAnnotation: ImagePDFAnnotation?
     weak var pdfView: PDFView?
+    var aspectRatioLocked: Bool = false
 
     // Visual constants
-    private let cornerHalf: CGFloat = 11   // half-side of corner handle square
-    private let deleteRadius: CGFloat = 13 // radius of delete circle
-    private let borderWidth: CGFloat = 2
+    private let cornerHalf: CGFloat = 13   // half-side of corner handle square (bigger for easier grabbing)
+    private let deleteRadius: CGFloat = 14  // radius of delete circle
+    let confirmRadius: CGFloat = 16  // radius of confirm circle (accessible for hit-testing)
+    private let borderWidth: CGFloat = 2.5
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -64,6 +66,10 @@ private class ImageAnnotationOverlayView: UIView {
 
             guard ann === selectedAnnotation else { continue }
 
+            // ── Semi-transparent selection overlay ─────────────────────────────
+            context.setFillColor(UIColor.systemBlue.withAlphaComponent(0.06).cgColor)
+            context.fill(sr)
+
             // ── Dashed selection border ──────────────────────────────────────
             context.saveGState()
             context.setStrokeColor(UIColor.systemBlue.cgColor)
@@ -75,7 +81,6 @@ private class ImageAnnotationOverlayView: UIView {
             context.setLineDash(phase: 0, lengths: [])
 
             // ── Corner resize handles (rounded squares) ──────────────────────
-            // Screen coords: minY=top, maxY=bottom (UIKit y-down)
             let corners = [
                 CGPoint(x: sr.minX, y: sr.minY),   // visual top-left
                 CGPoint(x: sr.maxX, y: sr.minY),   // visual top-right
@@ -85,29 +90,28 @@ private class ImageAnnotationOverlayView: UIView {
             for pt in corners {
                 let cr = CGRect(x: pt.x - cornerHalf, y: pt.y - cornerHalf,
                                 width: cornerHalf * 2, height: cornerHalf * 2)
-                let handlePath = UIBezierPath(roundedRect: cr, cornerRadius: 4)
+                let handlePath = UIBezierPath(roundedRect: cr, cornerRadius: 5)
                 // Shadow for depth
                 context.saveGState()
                 context.setShadow(offset: CGSize(width: 0, height: 1), blur: 3,
-                                  color: UIColor.black.withAlphaComponent(0.35).cgColor)
+                                  color: UIColor.black.withAlphaComponent(0.3).cgColor)
                 UIColor.white.setFill()
                 handlePath.fill()
                 context.restoreGState()
                 // Blue border
                 UIColor.systemBlue.setStroke()
-                handlePath.lineWidth = 1.5
+                handlePath.lineWidth = 2
                 handlePath.stroke()
             }
 
             // ── Delete button at visual top-center ───────────────────────────
-            // Positioned ON the top edge of the border (centered horizontally)
             let dc = CGPoint(x: sr.midX, y: sr.minY)
             let dr = CGRect(x: dc.x - deleteRadius, y: dc.y - deleteRadius,
                             width: deleteRadius * 2, height: deleteRadius * 2)
             // Shadow
             context.saveGState()
             context.setShadow(offset: CGSize(width: 0, height: 1), blur: 3,
-                              color: UIColor.black.withAlphaComponent(0.4).cgColor)
+                              color: UIColor.black.withAlphaComponent(0.35).cgColor)
             context.setFillColor(UIColor.systemRed.cgColor)
             context.fillEllipse(in: dr)
             context.restoreGState()
@@ -115,7 +119,7 @@ private class ImageAnnotationOverlayView: UIView {
             // White X mark
             let xOff = deleteRadius * 0.42
             context.setStrokeColor(UIColor.white.cgColor)
-            context.setLineWidth(2)
+            context.setLineWidth(2.5)
             context.setLineCap(.round)
             context.move(to: CGPoint(x: dc.x - xOff, y: dc.y - xOff))
             context.addLine(to: CGPoint(x: dc.x + xOff, y: dc.y + xOff))
@@ -123,7 +127,50 @@ private class ImageAnnotationOverlayView: UIView {
             context.move(to: CGPoint(x: dc.x + xOff, y: dc.y - xOff))
             context.addLine(to: CGPoint(x: dc.x - xOff, y: dc.y + xOff))
             context.strokePath()
+
+            // ── Confirm button at visual bottom-center (green circle + white checkmark) ──
+            let cc = CGPoint(x: sr.midX, y: sr.maxY + confirmRadius + 4)
+            let ccr = CGRect(x: cc.x - confirmRadius, y: cc.y - confirmRadius,
+                             width: confirmRadius * 2, height: confirmRadius * 2)
+            // Shadow
+            context.saveGState()
+            context.setShadow(offset: CGSize(width: 0, height: 1), blur: 3,
+                              color: UIColor.black.withAlphaComponent(0.3).cgColor)
+            context.setFillColor(UIColor.systemGreen.cgColor)
+            context.fillEllipse(in: ccr)
+            context.restoreGState()
+
+            // White checkmark
+            context.setStrokeColor(UIColor.white.cgColor)
+            context.setLineWidth(2.5)
+            context.setLineCap(.round)
+            context.setLineJoin(.round)
+            context.move(to: CGPoint(x: cc.x - confirmRadius * 0.35, y: cc.y))
+            context.addLine(to: CGPoint(x: cc.x - confirmRadius * 0.05, y: cc.y + confirmRadius * 0.3))
+            context.addLine(to: CGPoint(x: cc.x + confirmRadius * 0.4, y: cc.y - confirmRadius * 0.3))
+            context.strokePath()
+
+            // ── Aspect ratio indicator text ──────────────────────────────────
+            let infoText = (aspectRatioLocked ? "Aspect locked" : "Free resize") as NSString
+            let infoColor = aspectRatioLocked ? UIColor.systemBlue : UIColor.systemOrange
+            let infoFont = UIFont.systemFont(ofSize: 10, weight: .medium)
+            let infoAttrs: [NSAttributedString.Key: Any] = [
+                .font: infoFont,
+                .foregroundColor: infoColor.withAlphaComponent(0.7)
+            ]
+            let infoSize = infoText.size(withAttributes: infoAttrs)
+            let infoRect = CGRect(x: sr.midX - infoSize.width / 2,
+                                  y: cc.y + confirmRadius + 3,
+                                  width: infoSize.width, height: infoSize.height)
+            infoText.draw(in: infoRect, withAttributes: infoAttrs)
         }
+    }
+
+    /// Returns the center of the confirm button in view coordinates for the selected annotation.
+    func confirmButtonViewCenter() -> CGPoint? {
+        guard let pdfView = pdfView, let ann = selectedAnnotation, let page = ann.page else { return nil }
+        let sr = pdfView.convert(ann.bounds, from: page)
+        return CGPoint(x: sr.midX, y: sr.maxY + confirmRadius + 4)
     }
 }
 
@@ -146,6 +193,7 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
     private var currentPath: UIBezierPath?
     private var currentAnnotation: PDFAnnotation?
     private var panGesture: UIPanGestureRecognizer!
+    private var pinchGesture: UIPinchGestureRecognizer!
     private var drawingButton: UIButton!
     private var eraserButton: UIButton!
     private var highlightButton: UIButton!
@@ -169,14 +217,32 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
     private var imageDragOrigBounds: CGRect = .zero
     private var imageButton: UIButton?
 
+    // Pinch-to-resize state
+    private var pinchBaseWidth: CGFloat = 0
+    private var pinchBaseHeight: CGFloat = 0
+    private var pinchBaseCenter: CGPoint = .zero
+    private var pinchAnnPage: PDFPage?
+
     // Image overlay for live display
     private var overlayView: ImageAnnotationOverlayView!
     private var scrollObservation: NSKeyValueObservation?
 
     // Hit-test radius in PDF page points for handles
-    private let handleHitRadius: CGFloat = 18
+    private let handleHitRadius: CGFloat = 22
 
-    private enum ImageDragMode { case none, move, tl, tr, bl, br, deleteHit }
+    // Aspect ratio lock
+    private var aspectRatioLocked = false
+
+    // Remember last confirmed image position for next placement
+    private var lastConfirmedImageRect: CGRect?
+
+    // Image toolbar (shown when an image is selected)
+    private var imageToolbar: UIView!
+    private var imageToolbarStack: UIStackView!
+    private var normalToolStack: UIStackView!
+    private var aspectToggleButton: UIButton!
+
+    private enum ImageDragMode { case none, move, tl, tr, bl, br, deleteHit, confirmHit }
 
     init(pdfURL: URL, saveURL: URL, config: PDFAnnotationConfig? = nil, completion: @escaping (String?) -> Void) {
         self.pdfURL = pdfURL
@@ -198,6 +264,7 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
         setupPDFView()
         setupToolbar()
         setupPanGesture()
+        setupPinchGesture()
         NotificationCenter.default.addObserver(
             self, selector: #selector(handlePDFPageChanged),
             name: .PDFViewPageChanged, object: pdfView
@@ -225,7 +292,15 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
     private func refreshImageOverlay() {
         overlayView.annotations = annotationStack.compactMap { $0 as? ImagePDFAnnotation }
         overlayView.selectedAnnotation = selectedImageAnnotation
+        overlayView.aspectRatioLocked = aspectRatioLocked
         overlayView.setNeedsDisplay()
+
+        // Show/hide image toolbar
+        if selectedImageAnnotation != nil && imageToolbarStack.isHidden {
+            showImageToolbar()
+        } else if selectedImageAnnotation == nil && !imageToolbarStack.isHidden {
+            hideImageToolbar()
+        }
     }
 
     private func disableTextSelectionGestures(in view: UIView) {
@@ -263,13 +338,14 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
         separator.translatesAutoresizingMaskIntoConstraints = false
         bottomBar.addSubview(separator)
 
-        let stack = UIStackView()
-        stack.axis = .horizontal
-        stack.distribution = .fillEqually
-        stack.alignment = .center
-        stack.spacing = 0
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        bottomBar.addSubview(stack)
+        // ── Normal annotation tools ─────────────────────────────────────────
+        normalToolStack = UIStackView()
+        normalToolStack.axis = .horizontal
+        normalToolStack.distribution = .fillEqually
+        normalToolStack.alignment = .center
+        normalToolStack.spacing = 0
+        normalToolStack.translatesAutoresizingMaskIntoConstraints = false
+        bottomBar.addSubview(normalToolStack)
 
         drawingButton = makeSymbolButton(symbol: "pencil.slash", action: #selector(toggleDrawing))
         let highlightSymbol = (UIImage(systemName: "highlighter") != nil) ? "highlighter" : "rectangle.and.pencil.and.ellipsis"
@@ -304,7 +380,63 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
             wrapButton(undoButton),
             wrapButton(trashButton),
         ]
-        for item in items { stack.addArrangedSubview(item) }
+        for item in items { normalToolStack.addArrangedSubview(item) }
+
+        // ── Image editing toolbar (hidden by default) ───────────────────────
+        imageToolbarStack = UIStackView()
+        imageToolbarStack.axis = .vertical
+        imageToolbarStack.alignment = .fill
+        imageToolbarStack.spacing = 4
+        imageToolbarStack.translatesAutoresizingMaskIntoConstraints = false
+        imageToolbarStack.isHidden = true
+        bottomBar.addSubview(imageToolbarStack)
+
+        // Hint label
+        let hintLabel = UILabel()
+        hintLabel.text = "Drag to move · Corners to resize · Pinch to scale"
+        hintLabel.font = UIFont.systemFont(ofSize: 10)
+        hintLabel.textColor = .tertiaryLabel
+        hintLabel.textAlignment = .center
+        imageToolbarStack.addArrangedSubview(hintLabel)
+
+        // Button row
+        let imgBtnStack = UIStackView()
+        imgBtnStack.axis = .horizontal
+        imgBtnStack.distribution = .fillEqually
+        imgBtnStack.spacing = 10
+
+        // Aspect ratio toggle
+        aspectToggleButton = UIButton(type: .system)
+        aspectToggleButton.titleLabel?.font = UIFont.systemFont(ofSize: 13, weight: .medium)
+        aspectToggleButton.layer.cornerRadius = 8
+        aspectToggleButton.layer.borderWidth = 1.5
+        aspectToggleButton.addTarget(self, action: #selector(toggleAspectRatio), for: .touchUpInside)
+        updateAspectToggleUI()
+        imgBtnStack.addArrangedSubview(aspectToggleButton)
+
+        // Confirm button
+        let confirmBtn = UIButton(type: .system)
+        confirmBtn.setTitle("Confirm", for: .normal)
+        confirmBtn.titleLabel?.font = UIFont.systemFont(ofSize: 13, weight: .semibold)
+        confirmBtn.setTitleColor(.white, for: .normal)
+        confirmBtn.backgroundColor = .systemGreen
+        confirmBtn.layer.cornerRadius = 8
+        confirmBtn.addTarget(self, action: #selector(confirmImageTapped), for: .touchUpInside)
+        imgBtnStack.addArrangedSubview(confirmBtn)
+
+        // Delete button
+        let delBtn = UIButton(type: .system)
+        delBtn.setTitle("Delete", for: .normal)
+        delBtn.titleLabel?.font = UIFont.systemFont(ofSize: 13, weight: .semibold)
+        delBtn.setTitleColor(.white, for: .normal)
+        delBtn.backgroundColor = .systemRed
+        delBtn.layer.cornerRadius = 8
+        delBtn.addTarget(self, action: #selector(deleteImageTapped), for: .touchUpInside)
+        imgBtnStack.addArrangedSubview(delBtn)
+
+        imgBtnStack.translatesAutoresizingMaskIntoConstraints = false
+        imgBtnStack.heightAnchor.constraint(equalToConstant: 36).isActive = true
+        imageToolbarStack.addArrangedSubview(imgBtnStack)
 
         NSLayoutConstraint.activate([
             separator.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor),
@@ -312,10 +444,15 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
             separator.topAnchor.constraint(equalTo: bottomBar.topAnchor),
             separator.heightAnchor.constraint(equalToConstant: 0.5),
 
-            stack.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor, constant: 2),
-            stack.trailingAnchor.constraint(equalTo: bottomBar.trailingAnchor, constant: -2),
-            stack.topAnchor.constraint(equalTo: bottomBar.topAnchor, constant: 6),
-            stack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -6),
+            normalToolStack.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor, constant: 2),
+            normalToolStack.trailingAnchor.constraint(equalTo: bottomBar.trailingAnchor, constant: -2),
+            normalToolStack.topAnchor.constraint(equalTo: bottomBar.topAnchor, constant: 6),
+            normalToolStack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -6),
+
+            imageToolbarStack.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor, constant: 12),
+            imageToolbarStack.trailingAnchor.constraint(equalTo: bottomBar.trailingAnchor, constant: -12),
+            imageToolbarStack.topAnchor.constraint(equalTo: bottomBar.topAnchor, constant: 6),
+            imageToolbarStack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -6),
 
             bottomBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             bottomBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -331,6 +468,84 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
         default: initialSizeBtn = sizeMButton
         }
         updateSizeButtons(active: initialSizeBtn)
+    }
+
+    private func showImageToolbar() {
+        UIView.animate(withDuration: 0.2) {
+            self.normalToolStack.alpha = 0
+        } completion: { _ in
+            self.normalToolStack.isHidden = true
+            self.imageToolbarStack.isHidden = false
+            self.imageToolbarStack.alpha = 0
+            UIView.animate(withDuration: 0.2) {
+                self.imageToolbarStack.alpha = 1
+            }
+        }
+    }
+
+    private func hideImageToolbar() {
+        UIView.animate(withDuration: 0.2) {
+            self.imageToolbarStack.alpha = 0
+        } completion: { _ in
+            self.imageToolbarStack.isHidden = true
+            self.normalToolStack.isHidden = false
+            self.normalToolStack.alpha = 0
+            UIView.animate(withDuration: 0.2) {
+                self.normalToolStack.alpha = 1
+            }
+        }
+    }
+
+    @objc private func toggleAspectRatio() {
+        aspectRatioLocked.toggle()
+        overlayView.aspectRatioLocked = aspectRatioLocked
+        updateAspectToggleUI()
+        overlayView.setNeedsDisplay()
+    }
+
+    private func updateAspectToggleUI() {
+        if aspectRatioLocked {
+            aspectToggleButton.setTitle("Aspect: Locked", for: .normal)
+            aspectToggleButton.setTitleColor(.systemBlue, for: .normal)
+            aspectToggleButton.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.1)
+            aspectToggleButton.layer.borderColor = UIColor.systemBlue.cgColor
+        } else {
+            aspectToggleButton.setTitle("Aspect: Free", for: .normal)
+            aspectToggleButton.setTitleColor(.systemOrange, for: .normal)
+            aspectToggleButton.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.1)
+            aspectToggleButton.layer.borderColor = UIColor.systemOrange.cgColor
+        }
+    }
+
+    @objc private func confirmImageTapped() {
+        // Save position for next image placement
+        if let sel = selectedImageAnnotation {
+            lastConfirmedImageRect = sel.bounds
+        }
+        selectedImageAnnotation = nil
+        refreshImageOverlay()
+
+        // Exit image mode entirely and release scroll lock
+        isImageMode = false
+        pdfView.gestureRecognizers = originalGestureRecognizers
+        scrollView?.isScrollEnabled = true
+        imageButton?.tintColor = .secondaryLabel
+        hideImageToolbar()
+    }
+
+    @objc private func deleteImageTapped() {
+        guard let sel = selectedImageAnnotation else { return }
+        sel.page?.removeAnnotation(sel)
+        annotationStack.removeAll { $0 === sel }
+        selectedImageAnnotation = nil
+        refreshImageOverlay()
+
+        // Exit image mode entirely and release scroll lock
+        isImageMode = false
+        pdfView.gestureRecognizers = originalGestureRecognizers
+        scrollView?.isScrollEnabled = true
+        imageButton?.tintColor = .secondaryLabel
+        hideImageToolbar()
     }
 
     private func makeSymbolButton(symbol: String, action: Selector) -> UIButton {
@@ -495,7 +710,13 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
         panGesture.cancelsTouchesInView = true
         panGesture.delaysTouchesBegan = true
         panGesture.delaysTouchesEnded = true
+        panGesture.maximumNumberOfTouches = 1  // single finger only; pinch handled separately
         pdfView.addGestureRecognizer(panGesture)
+    }
+
+    private func setupPinchGesture() {
+        pinchGesture = UIPinchGestureRecognizer(target: self, action: #selector(handlePinchGesture(_:)))
+        pdfView.addGestureRecognizer(pinchGesture)
     }
 
     // MARK: - Mode toggles
@@ -510,6 +731,7 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
             pdfView.gestureRecognizers?.forEach { $0.isEnabled = false }
             scrollView = findScrollView(in: pdfView); scrollView?.isScrollEnabled = false
             panGesture.isEnabled = true
+            pinchGesture.isEnabled = true
             drawingButton.setImage(UIImage(systemName: "pencil"), for: .normal)
             drawingButton.tintColor = .systemBlue
         } else {
@@ -536,6 +758,7 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
             pdfView.gestureRecognizers?.forEach { $0.isEnabled = false }
             scrollView = findScrollView(in: pdfView); scrollView?.isScrollEnabled = false
             panGesture.isEnabled = true
+            pinchGesture.isEnabled = true
             eraserButton.tintColor = .systemOrange
         } else {
             pdfView.gestureRecognizers = originalGestureRecognizers; scrollView?.isScrollEnabled = true
@@ -558,6 +781,7 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
             pdfView.gestureRecognizers?.forEach { $0.isEnabled = false }
             scrollView = findScrollView(in: pdfView); scrollView?.isScrollEnabled = false
             panGesture.isEnabled = true
+            pinchGesture.isEnabled = true
             highlightButton.tintColor = .systemYellow
         } else {
             pdfView.gestureRecognizers = originalGestureRecognizers; scrollView?.isScrollEnabled = true
@@ -584,6 +808,7 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
             pdfView.gestureRecognizers?.forEach { $0.isEnabled = false }
             scrollView = findScrollView(in: pdfView); scrollView?.isScrollEnabled = false
             panGesture.isEnabled = true
+            pinchGesture.isEnabled = true
             imageButton?.tintColor = .systemGreen
 
             // Auto-place: pick image then place it in the center of the current page
@@ -601,14 +826,20 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
         }
     }
 
-    /// Places `image` in the center of the currently visible PDF page and selects it.
+    /// Places `image` at the last confirmed position (if any), otherwise in the center of the current page.
     private func placeImageInCenter(_ image: UIImage) {
         guard let page = pdfView.currentPage else { return }
-        let pb = page.bounds(for: .mediaBox)
-        let imgW = pb.width * 0.4
-        let imgH = imgW * image.size.height / max(image.size.width, 1)
-        let bounds = CGRect(x: pb.midX - imgW / 2, y: pb.midY - imgH / 2,
+        let bounds: CGRect
+        if let lastRect = lastConfirmedImageRect {
+            // Reuse last confirmed position and size
+            bounds = lastRect
+        } else {
+            let pb = page.bounds(for: .mediaBox)
+            let imgW = pb.width * 0.35
+            let imgH = imgW * image.size.height / max(image.size.width, 1)
+            bounds = CGRect(x: pb.midX - imgW / 2, y: pb.midY - imgH / 2,
                             width: imgW, height: imgH)
+        }
         let ann = ImagePDFAnnotation(image: image, bounds: bounds)
         page.addAnnotation(ann)
         annotationStack.append(ann)
@@ -715,6 +946,47 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
         return nil
     }
 
+    // MARK: - Pinch gesture for image resize
+
+    @objc private func handlePinchGesture(_ gesture: UIPinchGestureRecognizer) {
+        guard isImageMode, let sel = selectedImageAnnotation, let page = sel.page else { return }
+
+        switch gesture.state {
+        case .began:
+            pinchBaseWidth = sel.bounds.width
+            pinchBaseHeight = sel.bounds.height
+            pinchBaseCenter = CGPoint(x: sel.bounds.midX, y: sel.bounds.midY)
+            pinchAnnPage = page
+
+        case .changed:
+            let scale = gesture.scale.clamped(to: 0.2...5.0)
+            let newW = max(pinchBaseWidth * scale, 40)
+            let newH: CGFloat
+            if aspectRatioLocked {
+                let aspect = pinchBaseWidth / max(pinchBaseHeight, 1)
+                newH = newW / aspect
+            } else {
+                newH = max(pinchBaseHeight * scale, 40)
+            }
+
+            let nb = CGRect(x: pinchBaseCenter.x - newW / 2,
+                            y: pinchBaseCenter.y - newH / 2,
+                            width: newW, height: newH)
+
+            let annPage = pinchAnnPage ?? page
+            annPage.removeAnnotation(sel)
+            sel.bounds = nb
+            annPage.addAnnotation(sel)
+            refreshImageOverlay()
+
+        case .ended, .cancelled:
+            pinchAnnPage = nil
+
+        default:
+            break
+        }
+    }
+
     // MARK: - Image gesture handling
 
     private func handleImageGesture(_ gesture: UIPanGestureRecognizer, page: PDFPage, pageLocation: CGPoint) {
@@ -725,6 +997,16 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
             // Check selected image's handles
             if let sel = selectedImageAnnotation {
                 let b = sel.bounds
+
+                // Confirm: visual bottom-center → check via overlay view coordinates
+                let location = gesture.location(in: pdfView)
+                if let cfmCenter = overlayView.confirmButtonViewCenter() {
+                    let cfmR = overlayView.confirmRadius + 8  // generous hit area
+                    if hypot(location.x - cfmCenter.x, location.y - cfmCenter.y) <= cfmR {
+                        imageDragMode = .confirmHit; return
+                    }
+                }
+
                 // Delete: visual top-center → PDF (midX, maxY)
                 let deletePt = CGPoint(x: b.midX, y: b.maxY)
                 if imageDist(pageLocation, deletePt) <= r {
@@ -770,35 +1052,25 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
             }
 
         case .changed:
-            guard imageDragMode != .none, imageDragMode != .deleteHit,
+            guard imageDragMode != .none, imageDragMode != .deleteHit, imageDragMode != .confirmHit,
                   let sel = selectedImageAnnotation else { return }
             let dx = pageLocation.x - imageDragStartPagePt.x
             let dy = pageLocation.y - imageDragStartPagePt.y
             let orig = imageDragOrigBounds
-            let minSz: CGFloat = 60  // minimum size to prevent handle overlap
+            let minSz: CGFloat = 40
 
-            // PDF space: y increases upward.
-            // Visual top = maxY, visual bottom = minY
             var nb: CGRect
             switch imageDragMode {
             case .move:
                 nb = orig.offsetBy(dx: dx, dy: dy)
-            case .tl:   // top-left: minX moves right/left, maxY moves up/down
-                let newMinX = min(orig.minX + dx, orig.maxX - minSz)
-                let newMaxY = max(orig.maxY + dy, orig.minY + minSz)
-                nb = CGRect(x: newMinX, y: orig.minY, width: orig.maxX - newMinX, height: newMaxY - orig.minY)
-            case .tr:   // top-right: maxX moves, maxY moves
-                let newMaxX = max(orig.maxX + dx, orig.minX + minSz)
-                let newMaxY = max(orig.maxY + dy, orig.minY + minSz)
-                nb = CGRect(x: orig.minX, y: orig.minY, width: newMaxX - orig.minX, height: newMaxY - orig.minY)
-            case .bl:   // bottom-left: minX moves, minY moves
-                let newMinX = min(orig.minX + dx, orig.maxX - minSz)
-                let newMinY = min(orig.minY + dy, orig.maxY - minSz)
-                nb = CGRect(x: newMinX, y: newMinY, width: orig.maxX - newMinX, height: orig.maxY - newMinY)
-            case .br:   // bottom-right: maxX moves, minY moves
-                let newMaxX = max(orig.maxX + dx, orig.minX + minSz)
-                let newMinY = min(orig.minY + dy, orig.maxY - minSz)
-                nb = CGRect(x: orig.minX, y: newMinY, width: newMaxX - orig.minX, height: orig.maxY - newMinY)
+            case .tl, .tr, .bl, .br:
+                if aspectRatioLocked {
+                    let aRight = (imageDragMode == .tl || imageDragMode == .bl)
+                    let aBottom = (imageDragMode == .tl || imageDragMode == .tr)
+                    nb = aspectLockedResize(orig: orig, dx: dx, dy: dy, anchorRight: aRight, anchorBottom: aBottom, minSize: minSz)
+                } else {
+                    nb = freeResize(orig: orig, dx: dx, dy: dy, minSize: minSz)
+                }
             default:
                 nb = orig
             }
@@ -815,11 +1087,80 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
                 annotationStack.removeAll { $0 === sel }
                 selectedImageAnnotation = nil
                 refreshImageOverlay()
+            } else if imageDragMode == .confirmHit {
+                // Save position for next image placement
+                if let sel = selectedImageAnnotation {
+                    lastConfirmedImageRect = sel.bounds
+                }
+                selectedImageAnnotation = nil
+                refreshImageOverlay()
+                // Exit image mode and release scroll lock
+                isImageMode = false
+                pdfView.gestureRecognizers = originalGestureRecognizers
+                scrollView?.isScrollEnabled = true
+                imageButton?.tintColor = .secondaryLabel
+                hideImageToolbar()
             }
             imageDragMode = .none
 
         default:
             break
+        }
+    }
+
+    /// Aspect-ratio-locked resize from a corner handle (PDF coordinate space: y-up).
+    private func aspectLockedResize(orig: CGRect, dx: CGFloat, dy: CGFloat,
+                                     anchorRight: Bool, anchorBottom: Bool,
+                                     minSize: CGFloat) -> CGRect {
+        let origW = orig.width
+        let origH = orig.height
+        guard origW > 1, origH > 1 else { return orig }
+        let aspect = origW / origH
+
+        // Project drag delta along the diagonal to get uniform scale
+        let signX: CGFloat = anchorRight ? -1 : 1
+        let signY: CGFloat = anchorBottom ? -1 : 1
+        let projectedDelta = (signX * dx + signY * dy) / 2
+
+        var newW = max(origW + projectedDelta * signX * 2, minSize)
+        var newH = newW / aspect
+        if newH < minSize {
+            newH = minSize
+            newW = newH * aspect
+        }
+
+        // Anchor the opposite corner
+        let anchorX = anchorRight ? orig.maxX : orig.minX
+        let anchorY = anchorBottom ? orig.minY : orig.maxY
+
+        let newMinX = anchorRight ? anchorX - newW : anchorX
+        let newMinY = anchorBottom ? anchorY : anchorY - newH
+
+        return CGRect(x: newMinX, y: newMinY, width: newW, height: newH)
+    }
+
+    /// Free (non-aspect-locked) resize from the active corner.
+    private func freeResize(orig: CGRect, dx: CGFloat, dy: CGFloat, minSize: CGFloat) -> CGRect {
+        // PDF space: y-up. Visual TL=(minX,maxY), BR=(maxX,minY)
+        switch imageDragMode {
+        case .tl:
+            let newMinX = min(orig.minX + dx, orig.maxX - minSize)
+            let newMaxY = max(orig.maxY + dy, orig.minY + minSize)
+            return CGRect(x: newMinX, y: orig.minY, width: orig.maxX - newMinX, height: newMaxY - orig.minY)
+        case .tr:
+            let newMaxX = max(orig.maxX + dx, orig.minX + minSize)
+            let newMaxY = max(orig.maxY + dy, orig.minY + minSize)
+            return CGRect(x: orig.minX, y: orig.minY, width: newMaxX - orig.minX, height: newMaxY - orig.minY)
+        case .bl:
+            let newMinX = min(orig.minX + dx, orig.maxX - minSize)
+            let newMinY = min(orig.minY + dy, orig.maxY - minSize)
+            return CGRect(x: newMinX, y: newMinY, width: orig.maxX - newMinX, height: orig.maxY - newMinY)
+        case .br:
+            let newMaxX = max(orig.maxX + dx, orig.minX + minSize)
+            let newMinY = min(orig.minY + dy, orig.maxY - minSize)
+            return CGRect(x: orig.minX, y: newMinY, width: newMaxX - orig.minX, height: orig.maxY - newMinY)
+        default:
+            return orig
         }
     }
 
@@ -920,82 +1261,111 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
             completion(nil); dismiss(animated: true); return
         }
 
-        do {
-            let pdfData = document.dataRepresentation()!
-            let newDocument = PDFDocument(data: pdfData)!
+        // Show saving indicator
+        let overlay = UIView(frame: view.bounds)
+        overlay.backgroundColor = UIColor.black.withAlphaComponent(0.15)
+        overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        let spinner = UIActivityIndicatorView(style: .large)
+        spinner.center = overlay.center
+        spinner.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin, .flexibleTopMargin, .flexibleBottomMargin]
+        spinner.startAnimating()
+        overlay.addSubview(spinner)
+        let savingLabel = UILabel()
+        savingLabel.text = "Saving..."
+        savingLabel.textColor = .label
+        savingLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        savingLabel.sizeToFit()
+        savingLabel.center = CGPoint(x: overlay.center.x, y: overlay.center.y + 40)
+        savingLabel.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin, .flexibleTopMargin, .flexibleBottomMargin]
+        overlay.addSubview(savingLabel)
+        view.addSubview(overlay)
 
-            for pageIndex in 0..<document.pageCount {
-                guard let page = document.page(at: pageIndex) else { continue }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
 
-                let pageBounds = page.bounds(for: .mediaBox)
-                let flatData = NSMutableData()
-                UIGraphicsBeginPDFContextToData(flatData, pageBounds, nil)
-                UIGraphicsBeginPDFPage()
+            do {
+                let pdfData = document.dataRepresentation()!
+                let newDocument = PDFDocument(data: pdfData)!
 
-                if let context = UIGraphicsGetCurrentContext() {
-                    // Flip to screen space so page.draw() renders correctly
-                    context.translateBy(x: 0, y: pageBounds.height)
-                    context.scaleBy(x: 1, y: -1)
+                for pageIndex in 0..<document.pageCount {
+                    guard let page = document.page(at: pageIndex) else { continue }
 
-                    // Temporarily remove ImagePDFAnnotations before page.draw()
-                    // so PDFKit doesn't try to render them at all
-                    let imageAnns = page.annotations.compactMap { $0 as? ImagePDFAnnotation }
-                    imageAnns.forEach { page.removeAnnotation($0) }
+                    let pageBounds = page.bounds(for: .mediaBox)
+                    let flatData = NSMutableData()
+                    UIGraphicsBeginPDFContextToData(flatData, pageBounds, nil)
+                    UIGraphicsBeginPDFPage()
 
-                    page.draw(with: .mediaBox, to: context)
+                    if let context = UIGraphicsGetCurrentContext() {
+                        // Flip to screen space so page.draw() renders correctly
+                        context.translateBy(x: 0, y: pageBounds.height)
+                        context.scaleBy(x: 1, y: -1)
 
-                    // Restore image annotations
-                    imageAnns.forEach { page.addAnnotation($0) }
+                        // Temporarily remove ImagePDFAnnotations before page.draw()
+                        let imageAnns = page.annotations.compactMap { $0 as? ImagePDFAnnotation }
+                        imageAnns.forEach { page.removeAnnotation($0) }
 
-                    // Draw non-image annotations manually
-                    for annotation in page.annotations where !(annotation is ImagePDFAnnotation) {
-                        context.saveGState()
-                        if annotation.type == PDFAnnotationSubtype.highlight.rawValue {
-                            context.setFillColor(annotation.color.cgColor)
-                            context.fill(annotation.bounds)
-                        } else {
-                            context.setStrokeColor(annotation.color.cgColor)
-                            context.setLineWidth(annotation.border?.lineWidth ?? 2)
-                            if let paths = annotation.paths {
-                                for path in paths {
-                                    (path as? UIBezierPath)?.stroke()
+                        page.draw(with: .mediaBox, to: context)
+
+                        // Restore image annotations
+                        imageAnns.forEach { page.addAnnotation($0) }
+
+                        // Draw non-image annotations manually
+                        for annotation in page.annotations where !(annotation is ImagePDFAnnotation) {
+                            context.saveGState()
+                            if annotation.type == PDFAnnotationSubtype.highlight.rawValue {
+                                context.setFillColor(annotation.color.cgColor)
+                                context.fill(annotation.bounds)
+                            } else {
+                                context.setStrokeColor(annotation.color.cgColor)
+                                context.setLineWidth(annotation.border?.lineWidth ?? 2)
+                                if let paths = annotation.paths {
+                                    for path in paths {
+                                        (path as? UIBezierPath)?.stroke()
+                                    }
                                 }
                             }
+                            context.restoreGState()
                         }
-                        context.restoreGState()
+
+                        // Draw image annotations — correct orientation, no handles.
+                        for imgAnn in imageAnns {
+                            let b = imgAnn.bounds
+                            context.saveGState()
+                            context.translateBy(x: b.minX, y: b.maxY)
+                            context.scaleBy(x: 1, y: -1)
+                            imgAnn.image.draw(in: CGRect(origin: .zero, size: b.size))
+                            context.restoreGState()
+                        }
                     }
 
-                    // Draw image annotations — correct orientation, no handles.
-                    // Context is now y-up (PDF space) after the flip above.
-                    // Standard pattern: translate to visual top-left, flip y, draw at origin.
-                    for imgAnn in imageAnns {
-                        let b = imgAnn.bounds  // PDF space (y-up): maxY = visual top
-                        context.saveGState()
-                        context.translateBy(x: b.minX, y: b.maxY)
-                        context.scaleBy(x: 1, y: -1)
-                        imgAnn.image.draw(in: CGRect(origin: .zero, size: b.size))
-                        context.restoreGState()
+                    UIGraphicsEndPDFContext()
+
+                    if let newPageDoc = PDFDocument(data: flatData as Data),
+                       let flattenedPage = newPageDoc.page(at: 0) {
+                        newDocument.removePage(at: pageIndex)
+                        newDocument.insert(flattenedPage, at: pageIndex)
                     }
                 }
 
-                UIGraphicsEndPDFContext()
-
-                if let newPageDoc = PDFDocument(data: flatData as Data),
-                   let flattenedPage = newPageDoc.page(at: 0) {
-                    newDocument.removePage(at: pageIndex)
-                    newDocument.insert(flattenedPage, at: pageIndex)
+                if let finalData = newDocument.dataRepresentation() {
+                    try finalData.write(to: self.saveURL)
+                    DispatchQueue.main.async {
+                        overlay.removeFromSuperview()
+                        self.dismiss(animated: true) { self.completion(self.saveURL.path) }
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        overlay.removeFromSuperview()
+                        self.completion(nil)
+                    }
+                }
+            } catch {
+                print("Save error: \(error)")
+                DispatchQueue.main.async {
+                    overlay.removeFromSuperview()
+                    self.dismiss(animated: true) { self.completion(nil) }
                 }
             }
-
-            if let finalData = newDocument.dataRepresentation() {
-                try finalData.write(to: saveURL)
-                dismiss(animated: true) { self.completion(self.saveURL.path) }
-            } else {
-                completion(nil)
-            }
-        } catch {
-            print("Save error: \(error)")
-            dismiss(animated: true) { self.completion(nil) }
         }
     }
 
@@ -1017,6 +1387,14 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
         if isHighlightMode { highlightColor = color.withAlphaComponent(0.5) }
         else { penColor = color }
         updateColorSwatch()
+    }
+}
+
+// MARK: - Comparable clamped helper
+
+private extension Comparable {
+    func clamped(to range: ClosedRange<Self>) -> Self {
+        min(max(self, range.lowerBound), range.upperBound)
     }
 }
 
