@@ -1,237 +1,170 @@
 # flutter_pdf_annotations
 
-A Flutter plugin for viewing and annotating PDF documents with support for both iOS and Android. This plugin allows users to draw, highlight, and make annotations on PDF documents with a rich set of tools.
+A Flutter plugin for opening and annotating PDF files natively on iOS and Android.
+
+The plugin presents a full-screen native editor with freehand drawing, highlighting,
+image stamping, erasing, undo, color picker, and pen-size presets — then saves the
+annotated PDF back to a file path of your choice.
 
 ## Features
 
-- View PDF documents
-- Draw annotations with customizable pen colors and sizes
-- Save annotated PDFs
-- Cross-platform support (iOS & Android)
-- Modern UI with floating toolbar
-- Color picker for annotations
-- Adjustable pen thickness
-- Undo functionality
-- Support for both portrait and landscape orientations
+- Freehand pen annotations with custom colour and stroke width
+- Highlight tool with adjustable opacity
+- Stamp images (signatures, logos, etc.) onto any page
+- Erase individual annotations
+- Undo stack
+- Save annotated PDF to any writable path
+- Share annotated PDF via the native share sheet
+- Open PDFs from a file path, raw bytes, a URL, or a Flutter asset
+- Typed result — distinguish success, user-cancel, and errors without try/catch
 
-## Getting Started
+## Platform Support
 
-### Installation
+| Android | iOS |
+|---------|-----|
+| API 21+ | iOS 14+ |
 
-Add this to your package's `pubspec.yaml` file:
+## Installation
 
 ```yaml
 dependencies:
-  flutter_pdf_annotations:
-    git:
-      url:https://github.com/moghoneim-code/flutter_pdf_annotations.git
+  flutter_pdf_annotations: ^1.0.0
 ```
 
-### Platform-specific setup
+## Platform Setup
 
-#### Android
+### Android
 
-Add the following permission to your Android Manifest (`android/app/src/main/AndroidManifest.xml`):
+No permissions are required for paths inside the app's own directories
+(`getExternalFilesDir`, `filesDir`). If you intend to save to a custom
+path outside those directories the path-traversal guard will reject it.
+
+### iOS
+
+Add usage descriptions to your `ios/Runner/Info.plist` if you allow the
+user to pick images for stamping:
 
 ```xml
-<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+<key>NSPhotoLibraryUsageDescription</key>
+<string>Select images to insert into PDF annotations</string>
 ```
 
-#### iOS
+## Usage
 
-No additional setup required.
-
-### Usage
+### Open a local PDF
 
 ```dart
 import 'package:flutter_pdf_annotations/flutter_pdf_annotations.dart';
 
-// Open and annotate a PDF
-await FlutterPdfAnnotations.openPDF(
-  filePath: '/path/to/source.pdf',
-  savePath: '/path/to/save/annotated.pdf',
-  onFileSaved: (savedPath) {
-    if (savedPath != null) {
-      print('PDF saved successfully at: $savedPath');
-    } else {
-      print('Failed to save PDF');
-    }
-  },
+final result = await FlutterPdfAnnotations.openPDF(
+  filePath: '/path/to/document.pdf',
+);
+
+if (result.isSuccess) {
+  print('Saved to: ${result.savedPath}');
+} else if (result.isCancelled) {
+  print('User cancelled');
+} else {
+  print('Error: ${result.error}');
+}
+```
+
+### With configuration
+
+```dart
+final result = await FlutterPdfAnnotations.openPDF(
+  filePath: '/path/to/document.pdf',
+  savePath: '/path/to/annotated.pdf', // optional — auto-generated if omitted
+  config: PDFAnnotationConfig(
+    title: 'Review Contract',
+    initialPenColor: Colors.red,
+    initialHighlightColor: Colors.yellow.withOpacity(0.5),
+    initialStrokeWidth: 3.0, // 3 → S, 8 → M, 18 → L
+  ),
 );
 ```
 
-### Example
+### With image stamps (e.g. a signature)
 
 ```dart
-import 'dart:developer';
-import 'dart:io' as IO;
-import 'package:flutter/material.dart';
-import 'package:flutter_pdf_annotations/flutter_pdf_annotations.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+final signatureBytes = await File('signature.png').readAsBytes();
 
-void main() {
-  runApp(const MyApp());
-}
-
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
-
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  final GlobalKey<SfPdfViewerState> _pdfViewerKey = GlobalKey();
-  late PdfViewerController _pdfViewerController;
-  String? _currentPdfPath;
-
-  @override
-  void initState() {
-    super.initState();
-    _pdfViewerController = PdfViewerController();
-  }
-
-  Future<void> _handlePDFSelection() async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf'],
-        withData: true,
-      );
-
-      if (result != null && result.files.single.path != null) {
-        final filePath = result.files.single.path!;
-        log('Original file path: $filePath');
-        final savePath = filePath.replaceAll('.pdf', '_annotated.pdf');
-
-        await FlutterPdfAnnotations.openPDF(
-          filePath: filePath,
-          savePath: savePath,
-          onFileSaved: (path) async {
-            if (path != null) {
-              log('PDF saved at: $path');
-              // First clear the current PDF
-              setState(() {
-                _currentPdfPath = null;
-              });
-
-              // Wait for the widget to rebuild
-              await Future.delayed(const Duration(milliseconds: 100));
-
-              if (!mounted) return;
-
-              // Load the new PDF
-              setState(() {
-                _currentPdfPath = path;
-              });
-
-              // Reset the controller
-              _pdfViewerController = PdfViewerController();
-            }
-          },
-        );
-      }
-    } catch (e) {
-      log('Error processing PDF: $e');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      home: Scaffold(
-        floatingActionButton: FloatingActionButton(
-          onPressed: _handlePDFSelection,
-          child: const Icon(Icons.picture_as_pdf),
-        ),
-        appBar: AppBar(
-          title: const Text('Plugin example app'),
-          actions: [
-            if (_currentPdfPath != null)
-              IconButton(
-                icon: const Icon(Icons.refresh),
-                onPressed: () {
-                  // Force refresh
-                  setState(() {
-                    final currentPath = _currentPdfPath;
-                    _currentPdfPath = null;
-                    Future.delayed(const Duration(milliseconds: 100), () {
-                      if (mounted) {
-                        setState(() {
-                          _currentPdfPath = currentPath;
-                        });
-                      }
-                    });
-                  });
-                },
-              ),
-          ],
-        ),
-        body: _currentPdfPath == null
-            ? const Center(child: Text('Click the FAB to select a PDF to annotate'))
-            : SfPdfViewer.file(
-          IO.File(_currentPdfPath!),
-          key: ValueKey(_currentPdfPath),
-          controller: _pdfViewerController,
-          onDocumentLoaded: (details) {
-            log('PDF loaded successfully');
-          },
-          onDocumentLoadFailed: (details) {
-            log('PDF load failed: ${details.error}');
-          },
-        ),
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _pdfViewerController.dispose();
-    super.dispose();
-  }
-}
+final result = await FlutterPdfAnnotations.openPDF(
+  filePath: '/path/to/document.pdf',
+  config: PDFAnnotationConfig(
+    title: 'Sign Document',
+    imagesToInsert: [signatureBytes],
+  ),
+);
 ```
 
-## Features
+### From raw bytes
 
-### Drawing Tools
-- Toggle drawing mode
-- Color picker for annotations
-- Adjustable pen thickness
-- Undo last annotation
+```dart
+final Uint8List pdfBytes = ...; // from network, database, etc.
 
-### Navigation
-- Page navigation (next/previous)
-- Save/Cancel options
-- Modern floating toolbar
+final result = await FlutterPdfAnnotations.openFromBytes(
+  bytes: pdfBytes,
+  config: PDFAnnotationConfig(title: 'In-Memory PDF'),
+);
+```
 
-### UI Components
-- Floating toolbar with drawing tools
-- Color picker dialog
-- Pen size slider
-- Navigation buttons
+### From a URL
 
-## Screenshots
+```dart
+final result = await FlutterPdfAnnotations.openFromUrl(
+  url: 'https://example.com/document.pdf',
+  config: PDFAnnotationConfig(title: 'Remote PDF'),
+);
+```
 
-[Add your screenshots here]
+### From a Flutter asset
+
+```dart
+// pubspec.yaml must declare: assets: [assets/sample.pdf]
+
+final result = await FlutterPdfAnnotations.openFromAsset(
+  assetPath: 'assets/sample.pdf',
+);
+```
+
+## API Reference
+
+### `FlutterPdfAnnotations`
+
+| Method | Description |
+|--------|-------------|
+| `openPDF` | Open a PDF from a file path |
+| `openFromBytes` | Open a PDF from `Uint8List` |
+| `openFromUrl` | Download and open a PDF from a URL |
+| `openFromAsset` | Open a PDF bundled as a Flutter asset |
+
+All methods return `Future<PdfAnnotationResult>`.
+
+### `PdfAnnotationResult`
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `isSuccess` | `bool` | User saved the PDF |
+| `savedPath` | `String?` | Output file path (non-null when `isSuccess`) |
+| `isCancelled` | `bool` | User dismissed without saving |
+| `isError` | `bool` | An error occurred |
+| `error` | `String?` | Error description (non-null when `isError`) |
+
+### `PDFAnnotationConfig`
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `title` | `String?` | Navigation bar title |
+| `initialPenColor` | `Color?` | Starting pen colour |
+| `initialHighlightColor` | `Color?` | Starting highlight colour (include alpha) |
+| `initialStrokeWidth` | `double?` | Starting stroke width (3 → S, 8 → M, 18 → L) |
+| `imagesToInsert` | `List<Uint8List>?` | Images available for stamping |
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## Issues and Feedback
-
-Please file issues and feedback using the [GitHub Issues](https://github.com/moghoneim-code/flutter_pdf_annotations/issues).
-
-## Author
-
-Mohamed Ghoneim
-- Email: mghoneam7@gmail.com
-- GitHub: [@moghoneim-code](https://github.com/moghoneim-code)
+Pull requests are welcome. Please open an issue first to discuss the change.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
+[MIT](LICENSE) © 2025 Mohamed Ghoneim

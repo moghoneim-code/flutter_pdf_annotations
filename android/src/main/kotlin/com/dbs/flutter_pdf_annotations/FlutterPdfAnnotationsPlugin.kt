@@ -18,16 +18,28 @@ class FlutterPdfAnnotationsPlugin : FlutterPlugin, MethodCallHandler, ActivityAw
     private const val TAG = "PdfAnnotationsPlugin"
     private var methodChannel: MethodChannel? = null
 
-    fun notifySaveResult(path: String?) {
+    /** Notify Flutter that the user saved successfully. */
+    fun notifySaveResult(path: String) {
+      notify(mapOf("status" to "success", "path" to path))
+    }
+
+    /** Notify Flutter that the user cancelled without saving. */
+    fun notifyCancelled() {
+      notify(mapOf("status" to "cancelled"))
+    }
+
+    /** Notify Flutter that a save error occurred. */
+    fun notifySaveError(message: String) {
+      Log.e(TAG, "Save error: $message")
+      notify(mapOf("status" to "error", "message" to message))
+    }
+
+    private fun notify(args: Map<String, String>) {
       try {
-        Log.d(TAG, "Notifying save result: $path")
-        methodChannel?.let { channel ->
-          channel.invokeMethod("onPdfSaved", path)
-        } ?: run {
-          Log.e(TAG, "Method channel is null when trying to notify save result")
-        }
+        methodChannel?.invokeMethod("onPdfSaved", args)
+          ?: Log.e(TAG, "Method channel is null — cannot notify Flutter")
       } catch (e: Exception) {
-        Log.e(TAG, "Error notifying save result: ${e.message}", e)
+        Log.e(TAG, "Error notifying Flutter: ${e.message}", e)
       }
     }
   }

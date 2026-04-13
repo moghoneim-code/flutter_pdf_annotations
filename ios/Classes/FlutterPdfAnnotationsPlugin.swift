@@ -85,6 +85,13 @@ public class FlutterPdfAnnotationsPlugin: NSObject, FlutterPlugin {
     }
 
     private func presentPDFViewController(pdfURL: URL, saveURL: URL, config: PDFAnnotationConfig?) {
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+              let rootVC = windowScene.windows.first?.rootViewController else {
+            FlutterPdfAnnotationsPlugin.notifySaveError("No active window scene available")
+            return
+        }
+
         let pdfViewController = PDFViewController(
             pdfURL: pdfURL,
             saveURL: saveURL,
@@ -92,26 +99,40 @@ public class FlutterPdfAnnotationsPlugin: NSObject, FlutterPlugin {
         ) { savedPath in
             if let path = savedPath, FileManager.default.fileExists(atPath: path) {
                 FlutterPdfAnnotationsPlugin.notifySaveResult(path)
+            } else if savedPath != nil {
+                // Path was returned but file doesn't exist — save failed
+                FlutterPdfAnnotationsPlugin.notifySaveError("Saved file not found at reported path")
             } else {
-                FlutterPdfAnnotationsPlugin.notifySaveResult(nil)
+                // nil → user cancelled
+                FlutterPdfAnnotationsPlugin.notifyCancelled()
             }
-        }
-
-        guard let windowScene = UIApplication.shared.connectedScenes
-            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
-              let rootVC = windowScene.windows.first?.rootViewController else {
-            FlutterPdfAnnotationsPlugin.notifySaveResult(nil)
-            return
         }
 
         let navigationController = UINavigationController(rootViewController: pdfViewController)
         navigationController.modalPresentationStyle = .fullScreen
-        rootVC.present(navigationController, animated: true, completion: nil)
+        rootVC.present(navigationController, animated: true) {
+            // Presentation succeeded — nothing extra needed
+        }
     }
 
-    static func notifySaveResult(_ path: String?) {
+    /// Notify Flutter: user saved successfully.
+    static func notifySaveResult(_ path: String) {
+        notify(["status": "success", "path": path])
+    }
+
+    /// Notify Flutter: user cancelled without saving.
+    static func notifyCancelled() {
+        notify(["status": "cancelled"])
+    }
+
+    /// Notify Flutter: a save error occurred.
+    static func notifySaveError(_ message: String) {
+        notify(["status": "error", "message": message])
+    }
+
+    private static func notify(_ args: [String: String]) {
         DispatchQueue.main.async {
-            methodChannel?.invokeMethod("onPdfSaved", arguments: path)
+            methodChannel?.invokeMethod("onPdfSaved", arguments: args)
         }
     }
 }

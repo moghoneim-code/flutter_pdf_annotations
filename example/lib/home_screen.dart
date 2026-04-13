@@ -30,27 +30,35 @@ class _HomeScreenState extends State<HomeScreen> {
     return result?.files.single.path;
   }
 
-  /// Wraps any demo action: sets busy flag, catches errors, shows snackbars.
-  Future<void> _run(String method, Future<String?> Function() action) async {
+  /// Wraps any demo action: sets busy flag, shows result snackbars.
+  Future<void> _run(
+      String method, Future<PdfAnnotationResult> Function() action) async {
     setState(() => _busy = true);
     try {
-      final path = await action();
+      final result = await action();
       if (!mounted) return;
-      if (path == null) {
+      if (result.isSuccess) {
+        setState(() {
+          _savedPath = result.savedPath;
+          _lastMethod = method;
+        });
+      } else if (result.isCancelled) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Cancelled — no file saved.')),
         );
       } else {
-        setState(() {
-          _savedPath = path;
-          _lastMethod = method;
-        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${result.error}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $e'),
+          content: Text('Unexpected error: $e'),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -61,15 +69,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ── API demos ──────────────────────────────────────────────────────────────
 
-  Future<String?> _demoBasic() async {
+  Future<PdfAnnotationResult> _demoBasic() async {
     final path = await _pickPdf();
-    if (path == null) return null;
+    if (path == null) return PdfAnnotationResult.cancelled();
     return FlutterPdfAnnotations.openPDF(filePath: path);
   }
 
-  Future<String?> _demoConfig() async {
+  Future<PdfAnnotationResult> _demoConfig() async {
     final path = await _pickPdf();
-    if (path == null) return null;
+    if (path == null) return PdfAnnotationResult.cancelled();
     return FlutterPdfAnnotations.openPDF(
       filePath: path,
       config: const PDFAnnotationConfig(
@@ -81,22 +89,22 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<String?> _demoImages() async {
+  Future<PdfAnnotationResult> _demoImages() async {
     final path = await _pickPdf();
-    if (path == null) return null;
+    if (path == null) return PdfAnnotationResult.cancelled();
 
     final imgResult = await FilePicker.platform.pickFiles(
       type: FileType.image,
       allowMultiple: true,
       withData: true,
     );
-    if (imgResult == null) return null;
+    if (imgResult == null) return PdfAnnotationResult.cancelled();
 
     final images = imgResult.files
         .where((f) => f.bytes != null)
         .map((f) => f.bytes!)
         .toList();
-    if (images.isEmpty) return null;
+    if (images.isEmpty) return PdfAnnotationResult.cancelled();
 
     return FlutterPdfAnnotations.openPDF(
       filePath: path,
@@ -107,8 +115,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<String?> _demoUrl() async {
-    if (!mounted) return null;
+  Future<PdfAnnotationResult> _demoUrl() async {
+    if (!mounted) return PdfAnnotationResult.cancelled();
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Downloading PDF…')));
 
@@ -121,18 +129,19 @@ class _HomeScreenState extends State<HomeScreen> {
     return result;
   }
 
-  Future<String?> _demoAsset() => FlutterPdfAnnotations.openFromAsset(
+  Future<PdfAnnotationResult> _demoAsset() =>
+      FlutterPdfAnnotations.openFromAsset(
         assetPath: 'assets/sample.pdf',
         config: const PDFAnnotationConfig(title: 'Asset PDF'),
       );
 
-  Future<String?> _demoBytes() async {
+  Future<PdfAnnotationResult> _demoBytes() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf'],
       withData: true,
     );
-    if (result?.files.single.bytes == null) return null;
+    if (result?.files.single.bytes == null) return PdfAnnotationResult.cancelled();
     return FlutterPdfAnnotations.openFromBytes(
       bytes: result!.files.single.bytes!,
       config: const PDFAnnotationConfig(title: 'In-Memory PDF'),

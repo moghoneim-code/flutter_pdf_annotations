@@ -1,0 +1,7 @@
+# Dev tooling — not relevant to package consumers
+.dart_tool/
+.idea/
+*.iml
+pubspec.lock
+build/
+ANALYSIS_REPORT.md

@@ -53,14 +53,14 @@ class PackageBanner extends StatelessWidget {
             style: TextStyle(
               fontSize: 13,
               height: 1.5,
-              color: cs.onPrimaryContainer.withOpacity(0.85),
+              color: cs.onPrimaryContainer.withValues(alpha:0.85),
             ),
           ),
           const SizedBox(height: 12),
-          Wrap(
+          const Wrap(
             spacing: 8,
             runSpacing: 6,
-            children: const [
+            children: [
               _FeatureChip('Freehand drawing'),
               _FeatureChip('Highlighting'),
               _FeatureChip('Eraser'),
@@ -84,7 +84,7 @@ class _FeatureChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: cs.onPrimaryContainer.withOpacity(0.12),
+        color: cs.onPrimaryContainer.withValues(alpha:0.12),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(

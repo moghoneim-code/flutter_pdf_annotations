@@ -55,7 +55,7 @@ class _ExampleCardState extends State<ExampleCard> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: widget.color.withOpacity(0.12),
+                    color: widget.color.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(widget.icon, color: widget.color, size: 20),

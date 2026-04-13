@@ -14,6 +14,7 @@ import android.view.*
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import java.io.*
 import kotlinx.coroutines.*
@@ -59,6 +60,27 @@ class PDFViewerActivity : AppCompatActivity() {
 
     // Progress overlay for save
     private var progressOverlay: FrameLayout? = null
+
+    // Ensures Flutter is notified exactly once per session.
+    private var resultReported = false
+
+    private fun reportSuccess(path: String) {
+        if (resultReported) return
+        resultReported = true
+        FlutterPdfAnnotationsPlugin.notifySaveResult(path)
+    }
+
+    private fun reportCancelled() {
+        if (resultReported) return
+        resultReported = true
+        FlutterPdfAnnotationsPlugin.notifyCancelled()
+    }
+
+    private fun reportError(message: String) {
+        if (resultReported) return
+        resultReported = true
+        FlutterPdfAnnotationsPlugin.notifySaveError(message)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -181,7 +203,7 @@ class PDFViewerActivity : AppCompatActivity() {
         cancelBtn.setTextColor(Color.parseColor("#2196F3"))
         cancelBtn.background = null
         cancelBtn.isAllCaps = false
-        cancelBtn.setOnClickListener { finish() }
+        cancelBtn.setOnClickListener { reportCancelled(); finish() }
         bar.addView(cancelBtn, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT,
             ViewGroup.LayoutParams.WRAP_CONTENT
@@ -786,9 +808,8 @@ class PDFViewerActivity : AppCompatActivity() {
     private fun saveAndFinish() {
         val savePath = intent.getStringExtra("savePath")
         if (savePath.isNullOrBlank()) {
-            Toast.makeText(this, "Error: Save path not provided", Toast.LENGTH_LONG).show()
-            FlutterPdfAnnotationsPlugin.notifySaveResult(null)
-            finish(); return
+            finishWithError("Save path not provided")
+            return
         }
 
         // Show progress indicator
@@ -813,43 +834,41 @@ class PDFViewerActivity : AppCompatActivity() {
         (window.decorView as? ViewGroup)?.addView(overlay)
         progressOverlay = overlay
 
-        CoroutineScope(Dispatchers.IO).launch {
-            val pdfBytes = buildAnnotatedPdf()
-            withContext(Dispatchers.Main) {
-                progressOverlay?.let { (window.decorView as? ViewGroup)?.removeView(it) }
-                if (pdfBytes == null) {
-                    Toast.makeText(this@PDFViewerActivity, "Error building PDF", Toast.LENGTH_LONG).show()
-                    FlutterPdfAnnotationsPlugin.notifySaveResult(null); finish(); return@withContext
-                }
-                try {
-                    val outputFile = File(savePath).canonicalFile
-                    val allowedDir = (getExternalFilesDir(null) ?: filesDir).canonicalPath
-                    if (!outputFile.path.startsWith(allowedDir + File.separator) &&
-                        !outputFile.path.startsWith(filesDir.canonicalPath + File.separator)) {
-                        Toast.makeText(this@PDFViewerActivity, "Error: Invalid save path", Toast.LENGTH_LONG).show()
-                        FlutterPdfAnnotationsPlugin.notifySaveResult(null); finish(); return@withContext
-                    }
-                    outputFile.parentFile?.mkdirs()
-                    withContext(Dispatchers.IO) { FileOutputStream(outputFile).use { it.write(pdfBytes) } }
-                    Toast.makeText(this@PDFViewerActivity, "PDF saved!", Toast.LENGTH_SHORT).show()
-                    FlutterPdfAnnotationsPlugin.notifySaveResult(outputFile.absolutePath)
-                } catch (e: Exception) {
-                    Toast.makeText(this@PDFViewerActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                    FlutterPdfAnnotationsPlugin.notifySaveResult(null)
-                }
-                finish()
+        lifecycleScope.launch {
+            val pdfBytes = withContext(Dispatchers.IO) { buildAnnotatedPdf() }
+            progressOverlay?.let { (window.decorView as? ViewGroup)?.removeView(it) }
+            if (pdfBytes == null) {
+                Toast.makeText(this@PDFViewerActivity, "Error building PDF", Toast.LENGTH_LONG).show()
+                reportError("Failed to build annotated PDF"); finish(); return@launch
             }
+            try {
+                val outputFile = File(savePath).canonicalFile
+                val allowedDir = (getExternalFilesDir(null) ?: filesDir).canonicalPath
+                if (!outputFile.path.startsWith(allowedDir + File.separator) &&
+                    !outputFile.path.startsWith(filesDir.canonicalPath + File.separator)) {
+                    Toast.makeText(this@PDFViewerActivity, "Error: Invalid save path", Toast.LENGTH_LONG).show()
+                    reportError("Save path outside allowed directory"); finish(); return@launch
+                }
+                outputFile.parentFile?.mkdirs()
+                withContext(Dispatchers.IO) { FileOutputStream(outputFile).use { it.write(pdfBytes) } }
+                Toast.makeText(this@PDFViewerActivity, "PDF saved!", Toast.LENGTH_SHORT).show()
+                reportSuccess(outputFile.absolutePath)
+            } catch (e: Exception) {
+                Toast.makeText(this@PDFViewerActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                reportError("Failed to write PDF: ${e.message ?: e.toString()}")
+            }
+            finish()
         }
     }
 
     private fun shareAndSave() {
-        CoroutineScope(Dispatchers.IO).launch {
-            val pdfBytes = buildAnnotatedPdf()
-            withContext(Dispatchers.Main) {
-                if (pdfBytes == null) {
-                    Toast.makeText(this@PDFViewerActivity, "Error preparing PDF for sharing", Toast.LENGTH_LONG).show()
-                    return@withContext
-                }
+        lifecycleScope.launch {
+            val pdfBytes = withContext(Dispatchers.IO) { buildAnnotatedPdf() }
+            if (pdfBytes == null) {
+                Toast.makeText(this@PDFViewerActivity, "Error preparing PDF for sharing", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            run {
                 try {
                     val tempFile = File(cacheDir, "share_${System.currentTimeMillis()}.pdf")
                     withContext(Dispatchers.IO) { FileOutputStream(tempFile).use { it.write(pdfBytes) } }
@@ -858,6 +877,8 @@ class PDFViewerActivity : AppCompatActivity() {
                         "${packageName}.flutter_pdf_annotations.provider",
                         tempFile
                     )
+                    // Schedule temp file deletion after the share sheet is dismissed
+                    tempFile.deleteOnExit()
                     startActivity(Intent.createChooser(
                         Intent(Intent.ACTION_SEND).apply {
                             type = "application/pdf"
@@ -873,12 +894,17 @@ class PDFViewerActivity : AppCompatActivity() {
     }
 
     private fun finishWithError(message: String) {
+        reportError(message)
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
         finish()
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        // If the activity is destroyed without explicitly reporting a result
+        // (back gesture, system kill, config change), notify Flutter so the
+        // Dart completer is not left hanging.
+        reportCancelled()
         pdfRenderer?.close()
         pageBitmaps.forEach { if (!it.isRecycled) it.recycle() }
         pageBitmaps.clear()

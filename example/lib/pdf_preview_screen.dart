@@ -77,7 +77,7 @@ class _PathBanner extends StatelessWidget {
             style: TextStyle(
               fontFamily: 'monospace',
               fontSize: 11,
-              color: cs.onPrimaryContainer.withOpacity(0.75),
+              color: cs.onPrimaryContainer.withValues(alpha: 0.75),
             ),
           ),
         ],

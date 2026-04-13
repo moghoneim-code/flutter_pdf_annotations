@@ -1,118 +1,127 @@
-import 'dart:async';
 import 'dart:developer';
 import 'dart:io';
-import 'dart:typed_data';
-import 'package:flutter/material.dart';
+
 import 'package:flutter/services.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 
-/// Configuration passed to the PDF annotation viewer on open.
-class PDFAnnotationConfig {
-  /// Title shown in the navigation / top bar.
-  final String? title;
+import 'flutter_pdf_annotations_method_channel.dart';
+import 'flutter_pdf_annotations_platform_interface.dart';
 
-  /// Initial pen/draw color. Include desired alpha in the color value.
-  final Color? initialPenColor;
+export 'flutter_pdf_annotations_platform_interface.dart'
+    show PdfAnnotationResult, PDFAnnotationConfig, FlutterPdfAnnotationsPlatform;
 
-  /// Initial highlight color. Include desired alpha (e.g. `Colors.yellow.withOpacity(0.5)`).
-  final Color? initialHighlightColor;
-
-  /// Initial stroke width. Nearest preset is used: 3.0 → S, 8.0 → M, 18.0 → L.
-  final double? initialStrokeWidth;
-
-  /// Images to make available for insertion onto PDF pages.
-  /// Each [Uint8List] is raw image bytes (PNG, JPEG, etc.).
-  final List<Uint8List>? imagesToInsert;
-
-  const PDFAnnotationConfig({
-    this.title,
-    this.initialPenColor,
-    this.initialHighlightColor,
-    this.initialStrokeWidth,
-    this.imagesToInsert,
-  });
-
-  Map<String, dynamic> toMap() => {
-        if (title != null) 'title': title,
-        // toSigned(32) ensures the value fits in Int32 on both native platforms
-        if (initialPenColor != null)
-          'initialPenColor': initialPenColor!.toARGB32().toSigned(32),
-        if (initialHighlightColor != null)
-          'initialHighlightColor': initialHighlightColor!.toARGB32().toSigned(32),
-        if (initialStrokeWidth != null) 'initialStrokeWidth': initialStrokeWidth,
-      };
-}
-
+/// Entry point for the `flutter_pdf_annotations` plugin.
+///
+/// Opens a native full-screen PDF editor on iOS and Android.
+/// All methods return a [PdfAnnotationResult] — check [PdfAnnotationResult.isSuccess],
+/// [PdfAnnotationResult.isCancelled], or [PdfAnnotationResult.isError] to handle
+/// each outcome without a try/catch.
+///
+/// ### Minimal example
+/// ```dart
+/// final result = await FlutterPdfAnnotations.openPDF(
+///   filePath: '/path/to/document.pdf',
+/// );
+/// if (result.isSuccess) print('Saved to ${result.savedPath}');
+/// ```
+///
+/// ### With full configuration
+/// ```dart
+/// final result = await FlutterPdfAnnotations.openPDF(
+///   filePath: '/path/to/document.pdf',
+///   savePath: '/path/to/annotated.pdf',
+///   config: PDFAnnotationConfig(
+///     title: 'Review Contract',
+///     initialPenColor: Colors.red,
+///     initialHighlightColor: Colors.yellow.withOpacity(0.5),
+///     initialStrokeWidth: 3.0,
+///     imagesToInsert: [await File('signature.png').readAsBytes()],
+///   ),
+/// );
+/// ```
 class FlutterPdfAnnotations {
-  static const MethodChannel _channel =
-      MethodChannel('flutter_pdf_annotations');
+  FlutterPdfAnnotations._();
 
-  static Completer<String?>? _completer;
-  static bool _handlerRegistered = false;
+  static final _defaultPlatform = MethodChannelFlutterPdfAnnotations();
 
-  static void _ensureHandlerRegistered() {
-    if (_handlerRegistered) return;
-    _handlerRegistered = true;
-    _channel.setMethodCallHandler((call) async {
-      if (call.method == 'onPdfSaved') {
-        final result = call.arguments as String?;
-        log('onPdfSaved: $result');
-        final completer = _completer;
-        _completer = null;
-        if (completer != null && !completer.isCompleted) {
-          completer.complete(result);
-        }
-      }
-    });
-  }
+  static FlutterPdfAnnotationsPlatform get _platform =>
+      FlutterPdfAnnotationsPlatform.instance ?? _defaultPlatform;
 
-  /// Open a local PDF file for annotation.
+  /// Opens the PDF at [filePath] in the native annotation editor.
   ///
-  /// Returns the saved file path, or `null` if the user cancelled.
-  /// [savePath] is auto-generated in the system temp directory when omitted.
-  static Future<String?> openPDF({
+  /// - [filePath] — absolute path to an existing PDF file.
+  /// - [savePath] — where to write the annotated output. An auto-generated
+  ///   path inside the app temp directory is used when omitted.
+  /// - [config] — optional editor configuration (title, colours, images, etc.).
+  ///
+  /// Returns a [PdfAnnotationResult]:
+  /// - [PdfAnnotationResult.isSuccess] — user tapped Save; [PdfAnnotationResult.savedPath] is the output path.
+  /// - [PdfAnnotationResult.isCancelled] — user dismissed the editor without saving.
+  /// - [PdfAnnotationResult.isError] — something went wrong; [PdfAnnotationResult.error] describes it.
+  static Future<PdfAnnotationResult> openPDF({
     required String filePath,
     String? savePath,
     PDFAnnotationConfig? config,
   }) async {
     if (!File(filePath).existsSync()) {
-      log('openPDF: source file not found: $filePath');
-      _showToast('Error: Source file does not exist');
-      return null;
+      log('flutter_pdf_annotations: source file not found: $filePath');
+      return PdfAnnotationResult.error(
+          'Source file does not exist: $filePath');
     }
-    final resolvedSavePath = savePath ?? _tempSavePath();
-    File(resolvedSavePath).parent.createSync(recursive: true);
-    final args = <String, dynamic>{
-      'filePath': filePath,
-      'savePath': resolvedSavePath,
-      ...?config?.toMap(),
-    };
-    if (config?.imagesToInsert != null && config!.imagesToInsert!.isNotEmpty) {
-      final paths = await _saveImagesToTemp(config.imagesToInsert!);
-      if (paths.isNotEmpty) args['imagePaths'] = paths;
+    try {
+      return await _platform.openPDF(
+          filePath: filePath, savePath: savePath, config: config);
+    } catch (e) {
+      log('flutter_pdf_annotations: openPDF threw — $e');
+      return PdfAnnotationResult.error(e.toString());
     }
-    return _openInternal(args: args);
   }
 
-  /// Open a PDF from raw bytes for annotation.
+  /// Opens a PDF supplied as raw [bytes] in the native annotation editor.
   ///
-  /// Useful when the PDF is already in memory (downloaded, generated, etc.).
-  static Future<String?> openFromBytes({
+  /// The bytes are written to a private temp file which is automatically
+  /// deleted once the editor session ends (success, cancel, or error).
+  ///
+  /// - [bytes] — raw PDF bytes, e.g. from a network response or database blob.
+  /// - [savePath] — see [openPDF].
+  /// - [config] — see [openPDF].
+  static Future<PdfAnnotationResult> openFromBytes({
     required Uint8List bytes,
     String? savePath,
     PDFAnnotationConfig? config,
   }) async {
+    final dir = Directory(
+        '${Directory.systemTemp.path}/flutter_pdf_annotations');
+    if (!dir.existsSync()) dir.createSync(recursive: true);
     final tempFile = File(
-      '${Directory.systemTemp.path}/pdf_in_${DateTime.now().millisecondsSinceEpoch}.pdf',
-    );
-    await tempFile.writeAsBytes(bytes);
-    return openPDF(filePath: tempFile.path, savePath: savePath, config: config);
+        '${dir.path}/pdf_in_${DateTime.now().millisecondsSinceEpoch}.pdf');
+    try {
+      await tempFile.writeAsBytes(bytes);
+    } catch (e) {
+      return PdfAnnotationResult.error('Failed to write PDF to temp file: $e');
+    }
+    try {
+      return await openPDF(
+          filePath: tempFile.path, savePath: savePath, config: config);
+    } finally {
+      try {
+        tempFile.deleteSync();
+      } catch (_) {}
+    }
   }
 
-  /// Download a PDF from [url] and open it for annotation.
+  /// Downloads a PDF from [url] and opens it in the native annotation editor.
   ///
-  /// Uses `dart:io` `HttpClient`; no additional packages required.
-  static Future<String?> openFromUrl({
+  /// Uses `dart:io` [HttpClient] — no additional networking packages required.
+  /// The downloaded file is stored in a private temp file and deleted after
+  /// the session ends.
+  ///
+  /// Requires the `INTERNET` permission on Android
+  /// (`<uses-permission android:name="android.permission.INTERNET"/>`).
+  ///
+  /// - [url] — a publicly accessible PDF URL (`http` or `https`).
+  /// - [savePath] — see [openPDF].
+  /// - [config] — see [openPDF].
+  static Future<PdfAnnotationResult> openFromUrl({
     required String url,
     String? savePath,
     PDFAnnotationConfig? config,
@@ -122,28 +131,30 @@ class FlutterPdfAnnotations {
       final request = await client.getUrl(Uri.parse(url));
       final response = await request.close();
       if (response.statusCode != 200) {
-        _showToast('Error downloading PDF: HTTP ${response.statusCode}');
         client.close();
-        return null;
+        return PdfAnnotationResult.error(
+            'HTTP ${response.statusCode} downloading PDF from $url');
       }
-      final bytes = await response
-          .fold<List<int>>([], (acc, chunk) => acc..addAll(chunk));
+      final bytes =
+          await response.fold<List<int>>([], (acc, c) => acc..addAll(c));
       client.close();
       return openFromBytes(
-        bytes: Uint8List.fromList(bytes),
-        savePath: savePath,
-        config: config,
-      );
+          bytes: Uint8List.fromList(bytes),
+          savePath: savePath,
+          config: config);
     } catch (e) {
-      _showToast('Error downloading PDF: $e');
-      return null;
+      return PdfAnnotationResult.error('Error downloading PDF: $e');
     }
   }
 
-  /// Load a PDF from a Flutter asset and open it for annotation.
+  /// Opens a PDF bundled as a Flutter asset in the native annotation editor.
   ///
-  /// [assetPath] matches the key declared in pubspec.yaml (e.g. `'assets/sample.pdf'`).
-  static Future<String?> openFromAsset({
+  /// [assetPath] must match a key declared under `flutter → assets` in
+  /// `pubspec.yaml`, e.g. `'assets/sample.pdf'`.
+  ///
+  /// - [savePath] — see [openPDF].
+  /// - [config] — see [openPDF].
+  static Future<PdfAnnotationResult> openFromAsset({
     required String assetPath,
     String? savePath,
     PDFAnnotationConfig? config,
@@ -151,61 +162,12 @@ class FlutterPdfAnnotations {
     try {
       final data = await rootBundle.load(assetPath);
       return openFromBytes(
-        bytes: data.buffer.asUint8List(),
-        savePath: savePath,
-        config: config,
-      );
+          bytes: data.buffer.asUint8List(),
+          savePath: savePath,
+          config: config);
     } catch (e) {
-      _showToast('Error loading asset: $e');
-      return null;
+      return PdfAnnotationResult.error(
+          'Error loading asset "$assetPath": $e');
     }
-  }
-
-  static String _tempSavePath() =>
-      '${Directory.systemTemp.path}/pdf_annotated_${DateTime.now().millisecondsSinceEpoch}.pdf';
-
-  static Future<List<String>> _saveImagesToTemp(List<Uint8List> images) async {
-    final paths = <String>[];
-    // Use a plugin-specific subdirectory so temp images are isolated
-    final dir = Directory(
-        '${Directory.systemTemp.path}/flutter_pdf_annotations_imgs');
-    if (!dir.existsSync()) dir.createSync(recursive: true);
-    for (int i = 0; i < images.length; i++) {
-      final file = File(
-        '${dir.path}/pdf_img_${DateTime.now().millisecondsSinceEpoch}_$i.png',
-      );
-      await file.writeAsBytes(images[i]);
-      paths.add(file.path);
-    }
-    return paths;
-  }
-
-  static Future<String?> _openInternal(
-      {required Map<String, dynamic> args}) async {
-    _ensureHandlerRegistered();
-    final completer = Completer<String?>();
-    _completer = completer;
-    try {
-      await _channel.invokeMethod('openPDF', args);
-    } catch (e) {
-      log('Error opening PDF: $e');
-      _showToast('Error opening PDF: $e');
-      if (_completer == completer) _completer = null;
-      completer.complete(null);
-      return null;
-    }
-    return completer.future;
-  }
-
-  static void _showToast(String message) {
-    Fluttertoast.showToast(
-      msg: message,
-      toastLength: Toast.LENGTH_LONG,
-      gravity: ToastGravity.BOTTOM,
-      timeInSecForIosWeb: 2,
-      backgroundColor: Colors.black87,
-      textColor: Colors.white,
-      fontSize: 16.0,
-    );
   }
 }
