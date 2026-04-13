@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Select images to insert into PDF annotations</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Read and save annotated PDF files</string>
 </dict>
 </plist>

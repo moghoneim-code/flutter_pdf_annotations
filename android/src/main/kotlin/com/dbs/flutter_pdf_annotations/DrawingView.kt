@@ -5,6 +5,7 @@ import android.graphics.*
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
+import java.util.concurrent.CopyOnWriteArrayList
 
 class DrawingView(context: Context) : View(context) {
     private var paint = Paint().apply {
@@ -17,22 +18,25 @@ class DrawingView(context: Context) : View(context) {
     }
 
     private var currentPath: Path? = null
-    private var paths = mutableListOf<AnnotationData>()
+    private var paths = CopyOnWriteArrayList<AnnotationData>()
     private var matrix = Matrix()
     private var inverseMatrix = Matrix()
     private var originalStrokeWidth = 5f
     private var isEraserMode = false
 
-    private val highlights = mutableListOf<HighlightAnnotationData>()
+    private val highlights = CopyOnWriteArrayList<HighlightAnnotationData>()
     private var currentHighlightRect: RectF? = null
     private var highlightStartX = 0f
     private var highlightStartY = 0f
     private var isHighlightMode = false
     private var highlightColor = Color.argb(128, 255, 255, 0)
-    private val annotationHistory = mutableListOf<AnnotationType>()
+    private val annotationHistory = CopyOnWriteArrayList<AnnotationType>()
+
+    // Reusable paint for highlight drawing (avoid allocating in onDraw)
+    private val highlightPaint = Paint().apply { style = Paint.Style.FILL }
 
     // Image annotation state
-    private val imageAnnotations = mutableListOf<ImageAnnotationData>()
+    private val imageAnnotations = CopyOnWriteArrayList<ImageAnnotationData>()
     private var selectedImageIndex = -1
     private var dragMode = DragMode.NONE
     private var dragStart = PointF()
@@ -73,7 +77,7 @@ class DrawingView(context: Context) : View(context) {
 
         override fun onScale(detector: ScaleGestureDetector): Boolean {
             val img = imageAnnotations.getOrNull(selectedImageIndex) ?: return false
-            val scale = detector.scaleFactor.coerceIn(0.3f, 5.0f)
+            val scale = detector.scaleFactor.coerceIn(MIN_PINCH_SCALE, MAX_PINCH_SCALE)
             val newW = (pinchBaseWidth * scale).coerceAtLeast(MIN_IMAGE_SIZE)
             val newH = if (aspectRatioLocked) {
                 newW * pinchBaseHeight / pinchBaseWidth
@@ -100,6 +104,9 @@ class DrawingView(context: Context) : View(context) {
         private const val MIN_IMAGE_SIZE = 40f
         private const val HANDLE_VISUAL_RADIUS = 12f
         private const val ACTION_BUTTON_RADIUS = 16f
+        private const val MIN_PINCH_SCALE = 0.3f
+        private const val MAX_PINCH_SCALE = 5.0f
+        private const val PINCH_HIT_RADIUS_MULTIPLIER = 3.5f
     }
 
     fun setColor(color: Int) { paint = Paint(paint).apply { this.color = color } }
@@ -205,7 +212,6 @@ class DrawingView(context: Context) : View(context) {
         canvas.save()
         canvas.concat(matrix)
 
-        val highlightPaint = Paint().apply { style = Paint.Style.FILL }
         highlights.forEach { h -> highlightPaint.color = h.color; canvas.drawRect(h.rect, highlightPaint) }
         currentHighlightRect?.let { canvas.drawRect(it, Paint().apply { style = Paint.Style.FILL; color = highlightColor }) }
 
@@ -240,7 +246,7 @@ class DrawingView(context: Context) : View(context) {
                 }
 
                 // Delete button (top-center)
-                val del = deleteButtonCenter()!!
+                val del = deleteButtonCenter() ?: return
                 canvas.drawCircle(del.x, del.y + 1f / scale, btnR * 1.05f, shadowP)
                 canvas.drawCircle(del.x, del.y, btnR, Paint().apply {
                     style = Paint.Style.FILL; color = Color.parseColor("#F44336"); isAntiAlias = true
@@ -254,7 +260,7 @@ class DrawingView(context: Context) : View(context) {
                 canvas.drawLine(del.x + xOff, del.y - xOff, del.x - xOff, del.y + xOff, xP)
 
                 // Confirm button (bottom-center)
-                val cfm = confirmButtonCenter()!!
+                val cfm = confirmButtonCenter() ?: return
                 canvas.drawCircle(cfm.x, cfm.y + 1f / scale, btnR * 1.05f, shadowP)
                 canvas.drawCircle(cfm.x, cfm.y, btnR, Paint().apply {
                     style = Paint.Style.FILL; color = Color.parseColor("#4CAF50"); isAntiAlias = true

@@ -48,6 +48,23 @@ class FlutterPdfAnnotations {
       MethodChannel('flutter_pdf_annotations');
 
   static Completer<String?>? _completer;
+  static bool _handlerRegistered = false;
+
+  static void _ensureHandlerRegistered() {
+    if (_handlerRegistered) return;
+    _handlerRegistered = true;
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == 'onPdfSaved') {
+        final result = call.arguments as String?;
+        log('onPdfSaved: $result');
+        final completer = _completer;
+        _completer = null;
+        if (completer != null && !completer.isCompleted) {
+          completer.complete(result);
+        }
+      }
+    });
+  }
 
   /// Open a local PDF file for annotation.
   ///
@@ -59,6 +76,7 @@ class FlutterPdfAnnotations {
     PDFAnnotationConfig? config,
   }) async {
     if (!File(filePath).existsSync()) {
+      log('openPDF: source file not found: $filePath');
       _showToast('Error: Source file does not exist');
       return null;
     }
@@ -148,9 +166,13 @@ class FlutterPdfAnnotations {
 
   static Future<List<String>> _saveImagesToTemp(List<Uint8List> images) async {
     final paths = <String>[];
+    // Use a plugin-specific subdirectory so temp images are isolated
+    final dir = Directory(
+        '${Directory.systemTemp.path}/flutter_pdf_annotations_imgs');
+    if (!dir.existsSync()) dir.createSync(recursive: true);
     for (int i = 0; i < images.length; i++) {
       final file = File(
-        '${Directory.systemTemp.path}/pdf_img_${DateTime.now().millisecondsSinceEpoch}_$i.png',
+        '${dir.path}/pdf_img_${DateTime.now().millisecondsSinceEpoch}_$i.png',
       );
       await file.writeAsBytes(images[i]);
       paths.add(file.path);
@@ -160,26 +182,19 @@ class FlutterPdfAnnotations {
 
   static Future<String?> _openInternal(
       {required Map<String, dynamic> args}) async {
-    _completer = Completer<String?>();
-    _channel.setMethodCallHandler((call) async {
-      if (call.method == 'onPdfSaved') {
-        final result = call.arguments as String?;
-        log('onPdfSaved: $result');
-        if (!(_completer?.isCompleted ?? true)) {
-          _completer?.complete(result);
-        }
-        _completer = null;
-      }
-    });
+    _ensureHandlerRegistered();
+    final completer = Completer<String?>();
+    _completer = completer;
     try {
       await _channel.invokeMethod('openPDF', args);
     } catch (e) {
+      log('Error opening PDF: $e');
       _showToast('Error opening PDF: $e');
-      _completer?.complete(null);
-      _completer = null;
+      if (_completer == completer) _completer = null;
+      completer.complete(null);
       return null;
     }
-    return _completer!.future;
+    return completer.future;
   }
 
   static void _showToast(String message) {

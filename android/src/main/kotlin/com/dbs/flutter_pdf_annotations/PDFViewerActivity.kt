@@ -19,11 +19,18 @@ import java.io.*
 import kotlinx.coroutines.*
 
 class PDFViewerActivity : AppCompatActivity() {
+
+    companion object {
+        private const val MAX_RENDER_DENSITY = 3f
+        private const val MAX_IMAGE_FILE_SIZE = 10 * 1024 * 1024L // 10 MB
+    }
+
     private var pdfRenderer: PdfRenderer? = null
     private var pageCount = 0
     private lateinit var scrollView: LockableScrollView
     private lateinit var pdfContainer: LinearLayout
     private val drawingViews = mutableListOf<DrawingView>()
+    private val pageBitmaps = mutableListOf<Bitmap>()
     private val undoStack = mutableListOf<Int>()
     private var currentColor = Color.RED
     private var currentStrokeWidth = 8f
@@ -117,9 +124,22 @@ class PDFViewerActivity : AppCompatActivity() {
 
         intent.getStringArrayListExtra("imagePaths")?.forEach { path ->
             try {
-                val bmp = BitmapFactory.decodeFile(path)
+                val file = File(path)
+                if (!file.exists()) {
+                    android.util.Log.e("PDFViewerActivity", "Image not found: $path")
+                    return@forEach
+                }
+                if (file.length() > MAX_IMAGE_FILE_SIZE) {
+                    android.util.Log.e("PDFViewerActivity", "Image too large (>10MB): $path")
+                    return@forEach
+                }
+                val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+                val bmp = BitmapFactory.decodeFile(path, opts)
                 if (bmp != null) availableImages.add(bmp)
-            } catch (_: Exception) {}
+                else android.util.Log.e("PDFViewerActivity", "Failed to decode image: $path")
+            } catch (e: Exception) {
+                android.util.Log.e("PDFViewerActivity", "Error loading image: $path", e)
+            }
         }
     }
 
@@ -631,7 +651,12 @@ class PDFViewerActivity : AppCompatActivity() {
             val file = File(filePath)
             if (!file.exists()) throw FileNotFoundException("File not found: $filePath")
             val descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-            pdfRenderer = PdfRenderer(descriptor)
+            try {
+                pdfRenderer = PdfRenderer(descriptor)
+            } catch (e: Exception) {
+                descriptor.close()
+                throw e
+            }
             pageCount = pdfRenderer!!.pageCount
             for (i in 0 until pageCount) addPageView(i)
         } catch (e: Exception) {
@@ -645,8 +670,8 @@ class PDFViewerActivity : AppCompatActivity() {
             val displayWidth = resources.displayMetrics.widthPixels
             val frameHeight = (displayWidth.toFloat() * page.height / page.width).toInt()
 
-            // Render at display density for sharp output
-            val density = resources.displayMetrics.density.coerceAtMost(3f)
+            // Render at display density for sharp output (capped to avoid excessive memory)
+            val density = resources.displayMetrics.density.coerceAtMost(MAX_RENDER_DENSITY)
             val renderWidth = (page.width * density).toInt()
             val renderHeight = (page.height * density).toInt()
 
@@ -661,6 +686,7 @@ class PDFViewerActivity : AppCompatActivity() {
                     .apply { bottomMargin = dpToPx(4) }
             )
 
+            pageBitmaps.add(bitmap)
             val imageView = ImageView(this).apply {
                 setImageBitmap(bitmap)
                 scaleType = ImageView.ScaleType.FIT_CENTER
@@ -796,7 +822,13 @@ class PDFViewerActivity : AppCompatActivity() {
                     FlutterPdfAnnotationsPlugin.notifySaveResult(null); finish(); return@withContext
                 }
                 try {
-                    val outputFile = File(savePath).absoluteFile
+                    val outputFile = File(savePath).canonicalFile
+                    val allowedDir = (getExternalFilesDir(null) ?: filesDir).canonicalPath
+                    if (!outputFile.path.startsWith(allowedDir + File.separator) &&
+                        !outputFile.path.startsWith(filesDir.canonicalPath + File.separator)) {
+                        Toast.makeText(this@PDFViewerActivity, "Error: Invalid save path", Toast.LENGTH_LONG).show()
+                        FlutterPdfAnnotationsPlugin.notifySaveResult(null); finish(); return@withContext
+                    }
                     outputFile.parentFile?.mkdirs()
                     withContext(Dispatchers.IO) { FileOutputStream(outputFile).use { it.write(pdfBytes) } }
                     Toast.makeText(this@PDFViewerActivity, "PDF saved!", Toast.LENGTH_SHORT).show()
@@ -848,6 +880,8 @@ class PDFViewerActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         pdfRenderer?.close()
+        pageBitmaps.forEach { if (!it.isRecycled) it.recycle() }
+        pageBitmaps.clear()
     }
 }
 
