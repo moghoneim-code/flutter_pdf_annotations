@@ -762,10 +762,9 @@ class PDFViewerActivity : AppCompatActivity() {
     }
 
     private fun buildAnnotatedPdf(): ByteArray? {
+        val renderer = pdfRenderer ?: return null
+        val document = PdfDocument()
         return try {
-            val document = PdfDocument()
-            val renderer = pdfRenderer ?: return null
-
             for (i in 0 until pageCount) {
                 renderer.openPage(i).use { page ->
                     val pageInfo = PdfDocument.PageInfo.Builder(page.width, page.height, i).create()
@@ -800,9 +799,12 @@ class PDFViewerActivity : AppCompatActivity() {
 
             val out = ByteArrayOutputStream()
             document.writeTo(out)
-            document.close()
             out.toByteArray()
-        } catch (e: Exception) { null }
+        } catch (e: Exception) {
+            null
+        } finally {
+            document.close()
+        }
     }
 
     private fun saveAndFinish() {

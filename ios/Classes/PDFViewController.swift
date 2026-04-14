@@ -1284,8 +1284,14 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
             guard let self = self else { return }
 
             do {
-                let pdfData = document.dataRepresentation()!
-                let newDocument = PDFDocument(data: pdfData)!
+                guard let pdfData = document.dataRepresentation(),
+                      let newDocument = PDFDocument(data: pdfData) else {
+                    DispatchQueue.main.async {
+                        overlay.removeFromSuperview()
+                        self.completion(nil)
+                    }
+                    return
+                }
 
                 for pageIndex in 0..<document.pageCount {
                     guard let page = document.page(at: pageIndex) else { continue }
