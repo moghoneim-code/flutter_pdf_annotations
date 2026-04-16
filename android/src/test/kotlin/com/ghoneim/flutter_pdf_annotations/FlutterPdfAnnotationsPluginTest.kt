@@ -1,4 +1,4 @@
-package com.dbs.flutter_pdf_annotations
+package com.ghoneim.flutter_pdf_annotations
 
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel

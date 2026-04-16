@@ -1,5 +1,5 @@
 
-group = "com.dbs.flutter_pdf_annotations"
+group = "com.ghoneim.flutter_pdf_annotations"
 version = "1.0-SNAPSHOT"
 
 buildscript {
@@ -28,7 +28,7 @@ apply plugin: "kotlin-android"
 
 android {
     if (project.android.hasProperty("namespace")) {
-        namespace = "com.dbs.flutter_pdf_annotations"
+        namespace = "com.ghoneim.flutter_pdf_annotations"
     }
 
     compileSdk = 34

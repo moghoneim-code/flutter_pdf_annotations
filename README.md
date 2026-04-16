@@ -1,22 +1,26 @@
 # flutter_pdf_annotations
 
+[![pub package](https://img.shields.io/pub/v/flutter_pdf_annotations.svg)](https://pub.dev/packages/flutter_pdf_annotations)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/moghoneim-code/flutter_pdf_annotations/blob/main/LICENSE)
+[![platform](https://img.shields.io/badge/platform-Android%20%7C%20iOS-green.svg)](https://pub.dev/packages/flutter_pdf_annotations)
+
 A Flutter plugin for opening and annotating PDF files natively on iOS and Android.
 
-The plugin presents a full-screen native editor with freehand drawing, highlighting,
-image stamping, erasing, undo, color picker, and pen-size presets — then saves the
-annotated PDF back to a file path of your choice.
+Presents a full-screen native editor with freehand drawing, highlighting, image stamping, erasing, undo, color picker, and pen-size presets — then saves the annotated PDF back to a file path of your choice.
 
 ## Features
 
-- Freehand pen annotations with custom colour and stroke width
-- Highlight tool with adjustable opacity
-- Stamp images (signatures, logos, etc.) onto any page
-- Erase individual annotations
-- Undo stack
-- Save annotated PDF to any writable path
-- Share annotated PDF via the native share sheet
-- Open PDFs from a file path, raw bytes, a URL, or a Flutter asset
-- Typed result — distinguish success, user-cancel, and errors without try/catch
+| Feature | Description |
+|---------|-------------|
+| Freehand pen | Draw with custom colour and stroke width |
+| Highlighter | Semi-transparent highlight with adjustable opacity |
+| Image stamps | Place signatures, logos, or images — resize, accept, or delete |
+| Eraser | Remove individual annotations |
+| Undo | Step back through all annotation types |
+| Save | Write the annotated PDF to any writable path |
+| Share | Share via the native share sheet |
+| Multiple sources | Open from file path, raw bytes, URL, or Flutter asset |
+| Typed results | Distinguish success, cancellation, and errors without try/catch |
 
 ## Platform Support
 
@@ -24,25 +28,34 @@ annotated PDF back to a file path of your choice.
 |---------|-----|
 | API 21+ | iOS 14+ |
 
-## Installation
+## Getting Started
+
+### 1. Install
 
 ```yaml
 dependencies:
   flutter_pdf_annotations: ^1.0.0
 ```
 
-## Platform Setup
+```bash
+flutter pub get
+```
 
-### Android
+### 2. Platform Setup
 
-No permissions are required for paths inside the app's own directories
-(`getExternalFilesDir`, `filesDir`). If you intend to save to a custom
-path outside those directories the path-traversal guard will reject it.
+#### Android
 
-### iOS
+No extra permissions or setup needed for paths inside the app's own directories (`getExternalFilesDir`, `filesDir`).
 
-Add usage descriptions to your `ios/Runner/Info.plist` if you allow the
-user to pick images for stamping:
+If you plan to download PDFs from the internet using `openFromUrl`, make sure your `AndroidManifest.xml` includes:
+
+```xml
+<uses-permission android:name="android.permission.INTERNET"/>
+```
+
+#### iOS
+
+If you allow the user to pick images for stamping, add to `ios/Runner/Info.plist`:
 
 ```xml
 <key>NSPhotoLibraryUsageDescription</key>
@@ -74,17 +87,17 @@ if (result.isSuccess) {
 ```dart
 final result = await FlutterPdfAnnotations.openPDF(
   filePath: '/path/to/document.pdf',
-  savePath: '/path/to/annotated.pdf', // optional — auto-generated if omitted
+  savePath: '/path/to/annotated.pdf',
   config: PDFAnnotationConfig(
     title: 'Review Contract',
     initialPenColor: Colors.red,
     initialHighlightColor: Colors.yellow.withOpacity(0.5),
-    initialStrokeWidth: 3.0, // 3 → S, 8 → M, 18 → L
+    initialStrokeWidth: 3.0,
   ),
 );
 ```
 
-### With image stamps (e.g. a signature)
+### With image stamps
 
 ```dart
 final signatureBytes = await File('signature.png').readAsBytes();
@@ -101,7 +114,7 @@ final result = await FlutterPdfAnnotations.openPDF(
 ### From raw bytes
 
 ```dart
-final Uint8List pdfBytes = ...; // from network, database, etc.
+final Uint8List pdfBytes = /* from network, database, etc. */;
 
 final result = await FlutterPdfAnnotations.openFromBytes(
   bytes: pdfBytes,
@@ -121,7 +134,10 @@ final result = await FlutterPdfAnnotations.openFromUrl(
 ### From a Flutter asset
 
 ```dart
-// pubspec.yaml must declare: assets: [assets/sample.pdf]
+// Declare in pubspec.yaml:
+//   flutter:
+//     assets:
+//       - assets/sample.pdf
 
 final result = await FlutterPdfAnnotations.openFromAsset(
   assetPath: 'assets/sample.pdf',
@@ -130,36 +146,36 @@ final result = await FlutterPdfAnnotations.openFromAsset(
 
 ## API Reference
 
-### `FlutterPdfAnnotations`
+### FlutterPdfAnnotations
 
 | Method | Description |
 |--------|-------------|
-| `openPDF` | Open a PDF from a file path |
-| `openFromBytes` | Open a PDF from `Uint8List` |
-| `openFromUrl` | Download and open a PDF from a URL |
-| `openFromAsset` | Open a PDF bundled as a Flutter asset |
+| `openPDF({filePath, savePath?, config?})` | Open a PDF from a local file path |
+| `openFromBytes({bytes, savePath?, config?})` | Open a PDF from `Uint8List` bytes |
+| `openFromUrl({url, savePath?, config?})` | Download and open a PDF from a URL |
+| `openFromAsset({assetPath, savePath?, config?})` | Open a PDF bundled as a Flutter asset |
 
 All methods return `Future<PdfAnnotationResult>`.
 
-### `PdfAnnotationResult`
+### PdfAnnotationResult
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `isSuccess` | `bool` | User saved the PDF |
-| `savedPath` | `String?` | Output file path (non-null when `isSuccess`) |
-| `isCancelled` | `bool` | User dismissed without saving |
-| `isError` | `bool` | An error occurred |
-| `error` | `String?` | Error description (non-null when `isError`) |
+| `isSuccess` | `bool` | `true` when the user saved — `savedPath` is non-null |
+| `savedPath` | `String?` | Output file path |
+| `isCancelled` | `bool` | `true` when the user dismissed without saving |
+| `isError` | `bool` | `true` when an error occurred |
+| `error` | `String?` | Error description |
 
-### `PDFAnnotationConfig`
+### PDFAnnotationConfig
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `title` | `String?` | Navigation bar title |
-| `initialPenColor` | `Color?` | Starting pen colour |
-| `initialHighlightColor` | `Color?` | Starting highlight colour (include alpha) |
-| `initialStrokeWidth` | `double?` | Starting stroke width (3 → S, 8 → M, 18 → L) |
-| `imagesToInsert` | `List<Uint8List>?` | Images available for stamping |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `title` | `String?` | `'PDF Annotations'` | Editor navigation bar title |
+| `initialPenColor` | `Color?` | Red | Starting pen colour |
+| `initialHighlightColor` | `Color?` | Yellow (50% opacity) | Starting highlight colour (include alpha) |
+| `initialStrokeWidth` | `double?` | `8.0` (M) | Starting stroke width — `3.0` (S), `8.0` (M), `18.0` (L) |
+| `imagesToInsert` | `List<Uint8List>?` | `null` | Images available for stamping (PNG, JPEG, etc.) |
 
 ## Contributing
 
@@ -167,4 +183,4 @@ Pull requests are welcome. Please open an issue first to discuss the change.
 
 ## License
 
-[MIT](LICENSE) © 2025 Mohamed Ghoneim
+[MIT](LICENSE) &copy; 2025 Mohamed Ghoneim

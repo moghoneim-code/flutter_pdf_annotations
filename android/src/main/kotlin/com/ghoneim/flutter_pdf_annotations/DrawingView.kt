@@ -1,4 +1,4 @@
-package com.dbs.flutter_pdf_annotations
+package com.ghoneim.flutter_pdf_annotations
 
 import android.content.Context
 import android.graphics.*

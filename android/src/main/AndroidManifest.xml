@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-  package="com.dbs.flutter_pdf_annotations">
+  package="com.ghoneim.flutter_pdf_annotations">
     <application>
         <activity android:name=".PDFViewerActivity"
             android:theme="@style/Theme.AppCompat.Light.NoActionBar"

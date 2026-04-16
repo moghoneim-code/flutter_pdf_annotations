@@ -1,4 +1,4 @@
-package com.dbs.flutter_pdf_annotations_example
+package com.ghoneim.flutterPdfAnnotationsExample
 
 import io.flutter.embedding.android.FlutterActivity
 

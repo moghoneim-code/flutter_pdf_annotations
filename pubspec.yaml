@@ -39,5 +39,5 @@ flutter:
       ios:
         pluginClass: FlutterPdfAnnotationsPlugin
       android:
-        package: com.dbs.flutter_pdf_annotations
+        package: com.ghoneim.flutter_pdf_annotations
         pluginClass: FlutterPdfAnnotationsPlugin
