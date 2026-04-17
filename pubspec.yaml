@@ -1,9 +1,6 @@
 name: flutter_pdf_annotations
-description: >-
-  A Flutter plugin for opening and annotating PDF files natively on iOS and
-  Android. Supports freehand drawing, highlighting, image stamping, and saving
-  annotated PDFs — all via a native full-screen editor.
-version: 1.0.0
+description: "A Flutter plugin for annotating PDFs natively on iOS and Android. Supports drawing, highlighting, image stamping, and saving."
+version: 1.0.1
 homepage: https://github.com/moghoneim-code/flutter_pdf_annotations
 repository: https://github.com/moghoneim-code/flutter_pdf_annotations
 issue_tracker: https://github.com/moghoneim-code/flutter_pdf_annotations/issues
