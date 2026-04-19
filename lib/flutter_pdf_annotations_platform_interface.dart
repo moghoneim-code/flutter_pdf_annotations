@@ -114,12 +114,19 @@ class PDFAnnotationConfig {
   /// The user can place, resize, accept (✓) or delete (✕) each stamp.
   final List<Uint8List>? imagesToInsert;
 
+  /// Zero-based page index to open initially.
+  ///
+  /// For example, `initialPage: 2` opens the third page. Out-of-range values
+  /// are clamped to the valid range (falls back to the first page).
+  final int initialPage;
+
   const PDFAnnotationConfig({
     this.title,
     this.initialPenColor,
     this.initialHighlightColor,
     this.initialStrokeWidth,
     this.imagesToInsert,
+    this.initialPage = 0,
   });
 
   /// Serialises config fields to pass over the method channel.
@@ -132,6 +139,7 @@ class PDFAnnotationConfig {
           'initialHighlightColor':
               initialHighlightColor!.toARGB32().toSigned(32),
         if (initialStrokeWidth != null) 'initialStrokeWidth': initialStrokeWidth,
+        if (initialPage != 0) 'initialPage': initialPage,
       };
 }
 

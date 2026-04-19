@@ -59,12 +59,14 @@ public class FlutterPdfAnnotationsPlugin: NSObject, FlutterPlugin {
         let hlColorInt = args["initialHighlightColor"] as? Int
         let strokeWidth = args["initialStrokeWidth"] as? Double
         let imagePaths = args["imagePaths"] as? [String]
+        let initialPage = args["initialPage"] as? Int ?? 0
         let config = PDFAnnotationConfig(
             title: title,
             initialPenColor: penColorInt.map { colorFromArgbInt($0) },
             initialHighlightColor: hlColorInt.map { colorFromArgbInt($0) },
             initialStrokeWidth: strokeWidth.map { CGFloat($0) },
-            imagePaths: imagePaths
+            imagePaths: imagePaths,
+            initialPage: initialPage
         )
 
         result(nil)
