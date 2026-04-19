@@ -5,6 +5,10 @@
             android:theme="@style/Theme.AppCompat.Light.NoActionBar"
             android:exported="false">
         </activity>
+        <activity android:name=".ImagePlacementActivity"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar"
+            android:exported="false">
+        </activity>
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.flutter_pdf_annotations.provider"

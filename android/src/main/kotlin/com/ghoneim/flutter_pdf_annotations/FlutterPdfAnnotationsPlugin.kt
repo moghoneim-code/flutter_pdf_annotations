@@ -92,6 +92,7 @@ class FlutterPdfAnnotationsPlugin : FlutterPlugin, MethodCallHandler, ActivityAw
         call.argument<List<String>>("imagePaths")?.let {
           putStringArrayListExtra("imagePaths", ArrayList(it))
         }
+        call.argument<Int>("initialPage")?.let { putExtra("initialPage", it) }
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       }
 

@@ -165,6 +165,14 @@ class DrawingView(context: Context) : View(context) {
         invalidate()
     }
 
+    /** Add a confirmed image from the dedicated placement screen (no selection). */
+    fun addConfirmedImage(bitmap: Bitmap, rect: RectF) {
+        imageAnnotations.add(ImageAnnotationData(bitmap, rect))
+        annotationHistory.add(AnnotationType.IMAGE)
+        onStrokeAdded?.invoke()
+        invalidate()
+    }
+
     /** Confirm: burn the image (keep it), save position, deselect. */
     fun acceptSelectedImage() {
         if (selectedImageIndex >= 0 && selectedImageIndex < imageAnnotations.size) {
@@ -213,7 +221,13 @@ class DrawingView(context: Context) : View(context) {
         canvas.concat(matrix)
 
         highlights.forEach { h -> highlightPaint.color = h.color; canvas.drawRect(h.rect, highlightPaint) }
-        currentHighlightRect?.let { canvas.drawRect(it, Paint().apply { style = Paint.Style.FILL; color = highlightColor }) }
+        currentHighlightRect?.let { rect ->
+            canvas.drawRect(rect, Paint().apply { style = Paint.Style.FILL; color = highlightColor })
+            canvas.drawRect(rect, Paint().apply {
+                style = Paint.Style.STROKE; color = highlightColor; alpha = 200
+                strokeWidth = 2f / matrixScaleX(); isAntiAlias = true
+            })
+        }
 
         val r = handleRadiusPdf()
         val scale = matrixScaleX()

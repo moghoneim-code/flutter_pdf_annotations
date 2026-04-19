@@ -34,7 +34,7 @@ Presents a full-screen native editor with freehand drawing, highlighting, image 
 
 ```yaml
 dependencies:
-  flutter_pdf_annotations: ^1.0.0
+  flutter_pdf_annotations: ^1.1.0
 ```
 
 ```bash
@@ -176,6 +176,7 @@ All methods return `Future<PdfAnnotationResult>`.
 | `initialHighlightColor` | `Color?` | Yellow (50% opacity) | Starting highlight colour (include alpha) |
 | `initialStrokeWidth` | `double?` | `8.0` (M) | Starting stroke width — `3.0` (S), `8.0` (M), `18.0` (L) |
 | `imagesToInsert` | `List<Uint8List>?` | `null` | Images available for stamping (PNG, JPEG, etc.) |
+| `initialPage` | `int` | `0` | Zero-based page index to open at |
 
 ## Contributing
 
@@ -183,4 +184,4 @@ Pull requests are welcome. Please open an issue first to discuss the change.
 
 ## License
 
-[MIT](LICENSE) &copy; 2025 Mohamed Ghoneim
+[MIT](LICENSE) &copy; 2025-2026 Mohamed Ghoneim
