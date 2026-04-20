@@ -1,3 +1,7 @@
+## 1.2.0
+
+* **Localization support** — native UI is now displayed in the device language. Supported: English (fallback), Arabic, Spanish, and Portuguese. No configuration needed; language is resolved automatically from the system locale.
+
 ## 1.1.0
 
 * **Dedicated image placement screen** — tapping the image button now opens a focused single-page editor instead of overlaying on the scrollable PDF. Eliminates drag lag, snap-back glitches, and gesture conflicts with the scroll view.
