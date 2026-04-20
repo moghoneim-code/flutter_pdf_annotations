@@ -164,7 +164,7 @@ class ImagePlacementActivity : AppCompatActivity() {
         bar.setPadding(dpToPx(8), dpToPx(8), dpToPx(8), dpToPx(8))
 
         val backBtn = Button(this).apply {
-            text = "Back"; setTextColor(Color.parseColor("#2196F3"))
+            text = FPAStrings.back; setTextColor(Color.parseColor("#2196F3"))
             background = null; isAllCaps = false
             setOnClickListener { handleBack() }
         }
@@ -193,7 +193,7 @@ class ImagePlacementActivity : AppCompatActivity() {
         bar.addView(nextBtn, LinearLayout.LayoutParams(dpToPx(40), dpToPx(40)))
 
         val doneBtn = Button(this).apply {
-            text = "Done"; isAllCaps = false
+            text = FPAStrings.done; isAllCaps = false
             setTextColor(Color.WHITE)
             setTypeface(null, Typeface.BOLD)
             val bg = GradientDrawable()
@@ -271,7 +271,7 @@ class ImagePlacementActivity : AppCompatActivity() {
         })
 
         val confirmBtn = Button(this).apply {
-            text = "Confirm"; textSize = 13f; isAllCaps = false
+            text = FPAStrings.confirm; textSize = 13f; isAllCaps = false
             setTextColor(Color.WHITE)
             val bg = GradientDrawable(); bg.cornerRadius = dpToPx(8).toFloat()
             bg.setColor(Color.parseColor("#4CAF50")); background = bg
@@ -283,7 +283,7 @@ class ImagePlacementActivity : AppCompatActivity() {
         })
 
         val deleteBtn = Button(this).apply {
-            text = "Delete"; textSize = 13f; isAllCaps = false
+            text = FPAStrings.delete; textSize = 13f; isAllCaps = false
             setTextColor(Color.WHITE)
             val bg = GradientDrawable(); bg.cornerRadius = dpToPx(8).toFloat()
             bg.setColor(Color.parseColor("#F44336")); background = bg
@@ -334,7 +334,7 @@ class ImagePlacementActivity : AppCompatActivity() {
             pageImageView.setImageBitmap(bitmap)
         }
 
-        pageLabel.text = "Page ${currentPageIndex + 1}/$pageCount"
+        pageLabel.text = FPAStrings.pageLabel(currentPageIndex + 1, pageCount)
 
         // Update render transform after layout
         pageImageView.post { updateRenderTransform() }
@@ -418,12 +418,12 @@ class ImagePlacementActivity : AppCompatActivity() {
         val bg = GradientDrawable()
         bg.cornerRadius = dpToPx(8).toFloat()
         if (aspectRatioLocked) {
-            aspectBtn.text = "Aspect: Locked"
+            aspectBtn.text = FPAStrings.aspectLocked
             bg.setColor(Color.parseColor("#E3F2FD"))
             bg.setStroke(dpToPx(1), Color.parseColor("#2196F3"))
             aspectBtn.setTextColor(Color.parseColor("#2196F3"))
         } else {
-            aspectBtn.text = "Aspect: Free"
+            aspectBtn.text = FPAStrings.aspectFree
             bg.setColor(Color.parseColor("#FFF3E0"))
             bg.setStroke(dpToPx(1), Color.parseColor("#FF9800"))
             aspectBtn.setTextColor(Color.parseColor("#FF9800"))
@@ -452,13 +452,13 @@ class ImagePlacementActivity : AppCompatActivity() {
     private fun handleBack() {
         if (currentImage != null) {
             AlertDialog.Builder(this)
-                .setTitle("Discard Image?")
-                .setMessage("You have an unconfirmed image placement.")
-                .setPositiveButton("Discard") { _, _ ->
+                .setTitle(FPAStrings.discardImageTitle)
+                .setMessage(FPAStrings.discardImageMessage)
+                .setPositiveButton(FPAStrings.discard) { _, _ ->
                     currentImage = null
                     returnResults()
                 }
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(FPAStrings.cancel, null)
                 .show()
         } else {
             returnResults()

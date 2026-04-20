@@ -113,7 +113,7 @@ class PDFViewerActivity : AppCompatActivity() {
         pdfContainer.setPadding(0, topBarHeight, 0, bottomBarHeight)
         scrollView.addView(pdfContainer)
 
-        val title = intent.getStringExtra("title") ?: "PDF Annotations"
+        val title = intent.getStringExtra("title") ?: FPAStrings.defaultTitle
         val topBar = buildTopBar(title)
         val bottomBar = buildBottomBar()
 
@@ -219,7 +219,7 @@ class PDFViewerActivity : AppCompatActivity() {
         bar.setPadding(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(8))
 
         val cancelBtn = Button(this)
-        cancelBtn.text = "Cancel"
+        cancelBtn.text = FPAStrings.cancel
         cancelBtn.setTextColor(Color.parseColor("#2196F3"))
         cancelBtn.background = null
         cancelBtn.isAllCaps = false
@@ -247,7 +247,7 @@ class PDFViewerActivity : AppCompatActivity() {
         bar.addView(shareBtn, shareLp)
 
         val saveBtn = Button(this)
-        saveBtn.text = "Save"
+        saveBtn.text = FPAStrings.save
         saveBtn.setTextColor(Color.WHITE)
         saveBtn.isAllCaps = false
         saveBtn.setTypeface(null, android.graphics.Typeface.BOLD)
@@ -341,16 +341,16 @@ class PDFViewerActivity : AppCompatActivity() {
         toolRow.gravity = Gravity.CENTER_VERTICAL
         toolRow.setPadding(dpToPx(4), dpToPx(4), dpToPx(4), dpToPx(4))
 
-        drawBtn = makeToolButton("Draw", android.R.drawable.ic_menu_edit) { toggleMode(AnnotationMode.DRAW) }
-        highlightBtn = makeToolButton("Mark", android.R.drawable.ic_menu_crop) { toggleMode(AnnotationMode.HIGHLIGHT) }
-        eraserBtn = makeToolButton("Erase", android.R.drawable.ic_menu_close_clear_cancel) { toggleMode(AnnotationMode.ERASE) }
+        drawBtn = makeToolButton(FPAStrings.draw, android.R.drawable.ic_menu_edit) { toggleMode(AnnotationMode.DRAW) }
+        highlightBtn = makeToolButton(FPAStrings.mark, android.R.drawable.ic_menu_crop) { toggleMode(AnnotationMode.HIGHLIGHT) }
+        eraserBtn = makeToolButton(FPAStrings.erase, android.R.drawable.ic_menu_close_clear_cancel) { toggleMode(AnnotationMode.ERASE) }
 
         toolRow.addView(drawBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         toolRow.addView(highlightBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         toolRow.addView(eraserBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
         if (availableImages.isNotEmpty()) {
-            val btn = makeToolButton("Image", android.R.drawable.ic_menu_gallery) { toggleMode(AnnotationMode.IMAGE) }
+            val btn = makeToolButton(FPAStrings.image, android.R.drawable.ic_menu_gallery) { toggleMode(AnnotationMode.IMAGE) }
             imageBtn = btn
             toolRow.addView(btn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
@@ -363,7 +363,7 @@ class PDFViewerActivity : AppCompatActivity() {
         })
 
         // Action buttons (undo, clear)
-        val undoBtn = makeToolButton("Undo", android.R.drawable.ic_menu_revert) {
+        val undoBtn = makeToolButton(FPAStrings.undo, android.R.drawable.ic_menu_revert) {
             if (undoStack.isNotEmpty()) {
                 val pageIdx = undoStack.removeAt(undoStack.size - 1)
                 drawingViews.getOrNull(pageIdx)?.undo()
@@ -371,12 +371,12 @@ class PDFViewerActivity : AppCompatActivity() {
         }
         toolRow.addView(undoBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
-        val clearBtn = makeToolButton("Clear", android.R.drawable.ic_menu_delete) {
+        val clearBtn = makeToolButton(FPAStrings.clear, android.R.drawable.ic_menu_delete) {
             AlertDialog.Builder(this)
-                .setTitle("Clear All?")
-                .setMessage("This will remove all annotations.")
-                .setPositiveButton("Clear") { _, _ -> drawingViews.forEach { it.clearAnnotations() }; undoStack.clear() }
-                .setNegativeButton("Cancel", null)
+                .setTitle(FPAStrings.clearAllTitle)
+                .setMessage(FPAStrings.clearAllMessage)
+                .setPositiveButton(FPAStrings.clear) { _, _ -> drawingViews.forEach { it.clearAnnotations() }; undoStack.clear() }
+                .setNegativeButton(FPAStrings.cancel, null)
                 .show()
         }
         toolRow.addView(clearBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -700,7 +700,7 @@ class PDFViewerActivity : AppCompatActivity() {
         progressLp.gravity = Gravity.CENTER
         overlay.addView(progress, progressLp)
         val label = TextView(this).apply {
-            text = "Saving..."
+            text = FPAStrings.saving
             setTextColor(Color.parseColor("#424242"))
             textSize = 14f
             gravity = Gravity.CENTER
@@ -716,7 +716,7 @@ class PDFViewerActivity : AppCompatActivity() {
             val pdfBytes = withContext(Dispatchers.IO) { buildAnnotatedPdf() }
             progressOverlay?.let { (window.decorView as? ViewGroup)?.removeView(it) }
             if (pdfBytes == null) {
-                Toast.makeText(this@PDFViewerActivity, "Error building PDF", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@PDFViewerActivity, FPAStrings.errorBuildingPDF, Toast.LENGTH_LONG).show()
                 reportError("Failed to build annotated PDF"); finish(); return@launch
             }
             try {
@@ -729,7 +729,7 @@ class PDFViewerActivity : AppCompatActivity() {
                 }
                 outputFile.parentFile?.mkdirs()
                 withContext(Dispatchers.IO) { FileOutputStream(outputFile).use { it.write(pdfBytes) } }
-                Toast.makeText(this@PDFViewerActivity, "PDF saved!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@PDFViewerActivity, FPAStrings.pdfSaved, Toast.LENGTH_SHORT).show()
                 reportSuccess(outputFile.absolutePath)
             } catch (e: Exception) {
                 Toast.makeText(this@PDFViewerActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()

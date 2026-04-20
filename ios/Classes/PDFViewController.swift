@@ -152,7 +152,7 @@ private class ImageAnnotationOverlayView: UIView {
             context.strokePath()
 
             // ── Aspect ratio indicator text ──────────────────────────────────
-            let infoText = (aspectRatioLocked ? "Aspect locked" : "Free resize") as NSString
+            let infoText = (aspectRatioLocked ? FPAStrings.current.aspectLockedShort : FPAStrings.current.aspectFreeShort) as NSString
             let infoColor = aspectRatioLocked ? UIColor.systemBlue : UIColor.systemOrange
             let infoFont = UIFont.systemFont(ofSize: 10, weight: .medium)
             let infoAttrs: [NSAttributedString.Key: Any] = [
@@ -311,7 +311,7 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
 
     private func setupView() {
         view.backgroundColor = .systemBackground
-        navigationItem.title = config?.title ?? "PDF Annotations"
+        navigationItem.title = config?.title ?? FPAStrings.current.defaultTitle
     }
 
     // MARK: - Bottom bar
@@ -580,12 +580,12 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
 
     private func setupToolbar() {
         navigationItem.leftBarButtonItem = UIBarButtonItem(
-            title: "Cancel", style: .plain, target: self, action: #selector(dismissViewController))
+            title: FPAStrings.current.cancel, style: .plain, target: self, action: #selector(dismissViewController))
         let shareBtn = UIBarButtonItem(
             image: UIImage(systemName: "square.and.arrow.up"), style: .plain,
             target: self, action: #selector(sharePDF))
         let saveBtn = UIBarButtonItem(
-            title: "Save", style: .done, target: self, action: #selector(savePDF))
+            title: FPAStrings.current.save, style: .done, target: self, action: #selector(savePDF))
         navigationItem.rightBarButtonItems = [saveBtn, shareBtn]
     }
 
@@ -732,11 +732,12 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
     }
 
     @objc private func clearAllAnnotations() {
-        let alert = UIAlertController(title: "Clear All?",
-                                      message: "This will remove all annotations.",
+        let s = FPAStrings.current
+        let alert = UIAlertController(title: s.clearAllTitle,
+                                      message: s.clearAllMessage,
                                       preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Clear", style: .destructive) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: s.cancel, style: .cancel))
+        alert.addAction(UIAlertAction(title: s.clear, style: .destructive) { [weak self] _ in
             guard let self else { return }
             for ann in self.annotationStack { ann.page?.removeAnnotation(ann) }
             self.annotationStack.removeAll()
@@ -871,7 +872,7 @@ class PDFViewController: UIViewController, UIColorPickerViewControllerDelegate {
         spinner.startAnimating()
         overlay.addSubview(spinner)
         let savingLabel = UILabel()
-        savingLabel.text = "Saving..."
+        savingLabel.text = FPAStrings.current.saving
         savingLabel.textColor = .label
         savingLabel.font = .systemFont(ofSize: 14, weight: .medium)
         savingLabel.sizeToFit()

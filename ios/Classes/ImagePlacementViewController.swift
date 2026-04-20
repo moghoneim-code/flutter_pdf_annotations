@@ -79,7 +79,7 @@ class ImagePlacementViewController: UIViewController {
     // MARK: - Top Bar
 
     private func setupTopBar() {
-        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Back", style: .plain, target: self, action: #selector(backTapped))
+        navigationItem.leftBarButtonItem = UIBarButtonItem(title: FPAStrings.current.back, style: .plain, target: self, action: #selector(backTapped))
 
         let prevBtn = UIBarButtonItem(image: UIImage(systemName: "chevron.left"), style: .plain, target: self, action: #selector(prevPage))
         pageLabel = UILabel()
@@ -87,7 +87,7 @@ class ImagePlacementViewController: UIViewController {
         pageLabel.textAlignment = .center
         let pageLabelItem = UIBarButtonItem(customView: pageLabel)
         let nextBtn = UIBarButtonItem(image: UIImage(systemName: "chevron.right"), style: .plain, target: self, action: #selector(nextPage))
-        let doneBtn = UIBarButtonItem(title: "Done", style: .done, target: self, action: #selector(doneTapped))
+        let doneBtn = UIBarButtonItem(title: FPAStrings.current.done, style: .done, target: self, action: #selector(doneTapped))
 
         navigationItem.rightBarButtonItems = [doneBtn, nextBtn, pageLabelItem, prevBtn]
     }
@@ -184,7 +184,7 @@ class ImagePlacementViewController: UIViewController {
         updateAspectToggleUI()
 
         confirmButton = UIButton(type: .system)
-        confirmButton.setTitle("Confirm", for: .normal)
+        confirmButton.setTitle(FPAStrings.current.confirm, for: .normal)
         confirmButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
         confirmButton.setTitleColor(.white, for: .normal)
         confirmButton.backgroundColor = .systemGreen
@@ -193,7 +193,7 @@ class ImagePlacementViewController: UIViewController {
         actionRow.addArrangedSubview(confirmButton)
 
         deleteButton = UIButton(type: .system)
-        deleteButton.setTitle("Delete", for: .normal)
+        deleteButton.setTitle(FPAStrings.current.delete, for: .normal)
         deleteButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
         deleteButton.setTitleColor(.white, for: .normal)
         deleteButton.backgroundColor = .systemRed
@@ -247,7 +247,7 @@ class ImagePlacementViewController: UIViewController {
         guard currentPageIndex >= 0, currentPageIndex < document.pageCount,
               let page = document.page(at: currentPageIndex) else { return }
 
-        pageLabel.text = "Page \(currentPageIndex + 1)/\(document.pageCount)"
+        pageLabel.text = FPAStrings.current.pageLabel(current: currentPageIndex + 1, total: document.pageCount)
 
         let pageBounds = page.bounds(for: .mediaBox)
         currentPageBounds = pageBounds
@@ -355,12 +355,13 @@ class ImagePlacementViewController: UIViewController {
     @objc private func backTapped() {
         // Warn if there's an unconfirmed image
         if currentImage != nil {
-            let alert = UIAlertController(title: "Discard Image?", message: "You have an unconfirmed image placement.", preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "Discard", style: .destructive) { [weak self] _ in
+            let s = FPAStrings.current
+            let alert = UIAlertController(title: s.discardImageTitle, message: s.discardImageMessage, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: s.discard, style: .destructive) { [weak self] _ in
                 self?.currentImage = nil
                 self?.dismiss(animated: true) { self?.completion(self?.placements ?? []) }
             })
-            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            alert.addAction(UIAlertAction(title: s.cancel, style: .cancel))
             present(alert, animated: true)
         } else {
             dismiss(animated: true) { [weak self] in self?.completion(self?.placements ?? []) }
@@ -434,12 +435,12 @@ class ImagePlacementViewController: UIViewController {
 
     private func updateAspectToggleUI() {
         if aspectRatioLocked {
-            aspectToggleButton.setTitle("Aspect: Locked", for: .normal)
+            aspectToggleButton.setTitle(FPAStrings.current.aspectLocked, for: .normal)
             aspectToggleButton.setTitleColor(.systemBlue, for: .normal)
             aspectToggleButton.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.1)
             aspectToggleButton.layer.borderColor = UIColor.systemBlue.cgColor
         } else {
-            aspectToggleButton.setTitle("Aspect: Free", for: .normal)
+            aspectToggleButton.setTitle(FPAStrings.current.aspectFree, for: .normal)
             aspectToggleButton.setTitleColor(.systemOrange, for: .normal)
             aspectToggleButton.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.1)
             aspectToggleButton.layer.borderColor = UIColor.systemOrange.cgColor
