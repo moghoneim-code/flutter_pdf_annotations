@@ -5,15 +5,26 @@ import Foundation
 /// Language is resolved from the device locale automatically.
 struct FPAStrings {
 
-    static var current: FPAStrings = {
-        let lang: String
+    /// Resolved from the device locale. Call `configure(locale:)` to override.
+    private(set) static var current: FPAStrings = FPAStrings.fromDeviceLocale()
+
+    /// Override the locale used for the editor UI.
+    /// Pass `nil` to revert to the device locale.
+    static func configure(locale: String?) {
+        current = FPAStrings(lang: locale ?? deviceLanguage())
+    }
+
+    private static func fromDeviceLocale() -> FPAStrings {
+        FPAStrings(lang: deviceLanguage())
+    }
+
+    private static func deviceLanguage() -> String {
         if #available(iOS 16, *) {
-            lang = Locale.current.language.languageCode?.identifier ?? "en"
+            return Locale.current.language.languageCode?.identifier ?? "en"
         } else {
-            lang = (Locale.current as NSLocale).object(forKey: .languageCode) as? String ?? "en"
+            return (Locale.current as NSLocale).object(forKey: .languageCode) as? String ?? "en"
         }
-        return FPAStrings(lang: lang)
-    }()
+    }
 
     // MARK: - Common actions
     let cancel: String

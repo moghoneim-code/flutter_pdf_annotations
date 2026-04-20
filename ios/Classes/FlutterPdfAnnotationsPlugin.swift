@@ -60,6 +60,8 @@ public class FlutterPdfAnnotationsPlugin: NSObject, FlutterPlugin {
         let strokeWidth = args["initialStrokeWidth"] as? Double
         let imagePaths = args["imagePaths"] as? [String]
         let initialPage = args["initialPage"] as? Int ?? 0
+        let locale = args["locale"] as? String
+        FPAStrings.configure(locale: locale)
         let config = PDFAnnotationConfig(
             title: title,
             initialPenColor: penColorInt.map { colorFromArgbInt($0) },

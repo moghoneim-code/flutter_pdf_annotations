@@ -93,6 +93,7 @@ class FlutterPdfAnnotationsPlugin : FlutterPlugin, MethodCallHandler, ActivityAw
           putStringArrayListExtra("imagePaths", ArrayList(it))
         }
         call.argument<Int>("initialPage")?.let { putExtra("initialPage", it) }
+        call.argument<String>("locale")?.let { putExtra("locale", it) }
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       }
 

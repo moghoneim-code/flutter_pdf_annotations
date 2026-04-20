@@ -80,6 +80,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (path == null) return PdfAnnotationResult.cancelled();
     return FlutterPdfAnnotations.openPDF(
       filePath: path,
+
       config: const PDFAnnotationConfig(
         title: 'My Document',
         initialPenColor: Colors.indigo,
@@ -110,6 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
       filePath: path,
       config: PDFAnnotationConfig(
         title: 'Stamp Images',
+        locale: PdfLocale.arabic,
         imagesToInsert: images,
       ),
     );
@@ -132,7 +134,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<PdfAnnotationResult> _demoAsset() =>
       FlutterPdfAnnotations.openFromAsset(
         assetPath: 'assets/sample.pdf',
-        config: const PDFAnnotationConfig(title: 'Asset PDF'),
+
+        config: const PDFAnnotationConfig(title: 'Asset PDF',),
       );
 
   Future<PdfAnnotationResult> _demoBytes() async {

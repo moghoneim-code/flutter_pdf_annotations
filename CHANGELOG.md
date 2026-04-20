@@ -1,3 +1,8 @@
+## 1.3.0
+
+* **`PdfLocale` enum** — pass a typed locale to `PDFAnnotationConfig` instead of a raw string. Supported values: `PdfLocale.english`, `PdfLocale.arabic`, `PdfLocale.spanish`, `PdfLocale.portuguese`.
+* **HTTP headers for `openFromUrl`** — pass custom request headers (e.g. `Authorization`, cookies) via the new `headers` parameter.
+
 ## 1.2.0
 
 * **Localization support** — native UI is now displayed in the device language. Supported: English (fallback), Arabic, Spanish, and Portuguese. No configuration needed; language is resolved automatically from the system locale.

@@ -88,6 +88,7 @@ class ImagePlacementActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         val filePath = intent.getStringExtra("filePath") ?: run { finish(); return }
+        FPAStrings.configure(intent.getStringExtra("locale"))
         currentPageIndex = intent.getIntExtra("initialPage", 0)
 
         try {

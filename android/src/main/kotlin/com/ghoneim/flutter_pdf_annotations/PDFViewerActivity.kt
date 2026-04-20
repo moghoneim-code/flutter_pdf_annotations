@@ -149,6 +149,7 @@ class PDFViewerActivity : AppCompatActivity() {
     }
 
     private fun applyIntentConfig() {
+        FPAStrings.configure(intent.getStringExtra("locale"))
         if (intent.hasExtra("initialPenColor"))
             currentColor = intent.getIntExtra("initialPenColor", currentColor)
         if (intent.hasExtra("initialHighlightColor"))
@@ -490,6 +491,7 @@ class PDFViewerActivity : AppCompatActivity() {
             if (child.top + child.height / 2 > scrollY) { visiblePage = i; break }
         }
         intent.putExtra("initialPage", visiblePage)
+        getIntent().getStringExtra("locale")?.let { intent.putExtra("locale", it) }
         @Suppress("DEPRECATION")
         startActivityForResult(intent, IMAGE_PLACEMENT_REQUEST)
     }

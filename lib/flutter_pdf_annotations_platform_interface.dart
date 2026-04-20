@@ -84,6 +84,21 @@ class PdfAnnotationResult {
 ///   ),
 /// );
 /// ```
+/// Language used for the native annotation editor UI.
+///
+/// Pass to [PDFAnnotationConfig.locale]. When omitted the device locale
+/// is used, falling back to [PdfLocale.english] for unsupported languages.
+enum PdfLocale {
+  english('en'),
+  arabic('ar'),
+  spanish('es'),
+  portuguese('pt');
+
+  /// BCP-47 language tag sent to the native side.
+  final String code;
+  const PdfLocale(this.code);
+}
+
 class PDFAnnotationConfig {
   /// Title displayed in the editor's navigation bar.
   ///
@@ -120,6 +135,12 @@ class PDFAnnotationConfig {
   /// are clamped to the valid range (falls back to the first page).
   final int initialPage;
 
+  /// Language for the editor UI.
+  ///
+  /// When `null` the device locale is used, falling back to [PdfLocale.english]
+  /// if the device language is not supported.
+  final PdfLocale? locale;
+
   const PDFAnnotationConfig({
     this.title,
     this.initialPenColor,
@@ -127,6 +148,7 @@ class PDFAnnotationConfig {
     this.initialStrokeWidth,
     this.imagesToInsert,
     this.initialPage = 0,
+    this.locale,
   });
 
   /// Serialises config fields to pass over the method channel.
@@ -140,6 +162,7 @@ class PDFAnnotationConfig {
               initialHighlightColor!.toARGB32().toSigned(32),
         if (initialStrokeWidth != null) 'initialStrokeWidth': initialStrokeWidth,
         if (initialPage != 0) 'initialPage': initialPage,
+        if (locale != null) 'locale': locale!.code,
       };
 }
 

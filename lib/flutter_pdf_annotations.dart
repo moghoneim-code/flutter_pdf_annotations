@@ -7,7 +7,7 @@ import 'flutter_pdf_annotations_method_channel.dart';
 import 'flutter_pdf_annotations_platform_interface.dart';
 
 export 'flutter_pdf_annotations_platform_interface.dart'
-    show PdfAnnotationResult, PDFAnnotationConfig, FlutterPdfAnnotationsPlatform;
+    show PdfAnnotationResult, PDFAnnotationConfig, FlutterPdfAnnotationsPlatform, PdfLocale;
 
 /// Entry point for the `flutter_pdf_annotations` plugin.
 ///
@@ -119,16 +119,19 @@ class FlutterPdfAnnotations {
   /// (`<uses-permission android:name="android.permission.INTERNET"/>`).
   ///
   /// - [url] — a publicly accessible PDF URL (`http` or `https`).
+  /// - [headers] — optional HTTP request headers, e.g. `{'Authorization': 'Bearer token'}`.
   /// - [savePath] — see [openPDF].
   /// - [config] — see [openPDF].
   static Future<PdfAnnotationResult> openFromUrl({
     required String url,
+    Map<String, String>? headers,
     String? savePath,
     PDFAnnotationConfig? config,
   }) async {
     try {
       final client = HttpClient();
       final request = await client.getUrl(Uri.parse(url));
+      headers?.forEach((key, value) => request.headers.set(key, value));
       final response = await request.close();
       if (response.statusCode != 200) {
         client.close();

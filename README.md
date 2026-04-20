@@ -21,6 +21,7 @@ Presents a full-screen native editor with freehand drawing, highlighting, image 
 | Share | Share via the native share sheet |
 | Multiple sources | Open from file path, raw bytes, URL, or Flutter asset |
 | Typed results | Distinguish success, cancellation, and errors without try/catch |
+| Localization | Native UI in English 🇬🇧, Arabic 🇸🇦, Spanish 🇪🇸, and Portuguese 🇵🇹 |
 
 ## Platform Support
 
@@ -34,7 +35,7 @@ Presents a full-screen native editor with freehand drawing, highlighting, image 
 
 ```yaml
 dependencies:
-  flutter_pdf_annotations: ^1.1.0
+  flutter_pdf_annotations: ^1.3.0
 ```
 
 ```bash
@@ -93,6 +94,8 @@ final result = await FlutterPdfAnnotations.openPDF(
     initialPenColor: Colors.red,
     initialHighlightColor: Colors.yellow.withOpacity(0.5),
     initialStrokeWidth: 3.0,
+    initialPage: 2,           // open at page 3 (zero-based)
+    locale: PdfLocale.arabic, // force Arabic UI
   ),
 );
 ```
@@ -111,6 +114,19 @@ final result = await FlutterPdfAnnotations.openPDF(
 );
 ```
 
+### From a URL (with optional headers)
+
+```dart
+final result = await FlutterPdfAnnotations.openFromUrl(
+  url: 'https://example.com/document.pdf',
+  headers: {
+    'Authorization': 'Bearer your_token',
+    'X-Custom-Header': 'value',
+  },
+  config: PDFAnnotationConfig(title: 'Remote PDF'),
+);
+```
+
 ### From raw bytes
 
 ```dart
@@ -119,15 +135,6 @@ final Uint8List pdfBytes = /* from network, database, etc. */;
 final result = await FlutterPdfAnnotations.openFromBytes(
   bytes: pdfBytes,
   config: PDFAnnotationConfig(title: 'In-Memory PDF'),
-);
-```
-
-### From a URL
-
-```dart
-final result = await FlutterPdfAnnotations.openFromUrl(
-  url: 'https://example.com/document.pdf',
-  config: PDFAnnotationConfig(title: 'Remote PDF'),
 );
 ```
 
@@ -144,6 +151,29 @@ final result = await FlutterPdfAnnotations.openFromAsset(
 );
 ```
 
+## Localization
+
+The native editor UI is automatically displayed in the device language. You can also force a specific language via `PDFAnnotationConfig.locale`.
+
+| Enum | Language | Flag |
+|------|----------|------|
+| `PdfLocale.english` | English (default fallback) | 🇬🇧 |
+| `PdfLocale.arabic` | Arabic | 🇸🇦 |
+| `PdfLocale.spanish` | Spanish | 🇪🇸 |
+| `PdfLocale.portuguese` | Portuguese | 🇵🇹 |
+
+```dart
+// Auto-detect from device (recommended)
+PDFAnnotationConfig()
+
+// Force a specific language
+PDFAnnotationConfig(locale: PdfLocale.arabic)
+PDFAnnotationConfig(locale: PdfLocale.spanish)
+PDFAnnotationConfig(locale: PdfLocale.portuguese)
+```
+
+Any unsupported device locale falls back to English automatically.
+
 ## API Reference
 
 ### FlutterPdfAnnotations
@@ -152,7 +182,7 @@ final result = await FlutterPdfAnnotations.openFromAsset(
 |--------|-------------|
 | `openPDF({filePath, savePath?, config?})` | Open a PDF from a local file path |
 | `openFromBytes({bytes, savePath?, config?})` | Open a PDF from `Uint8List` bytes |
-| `openFromUrl({url, savePath?, config?})` | Download and open a PDF from a URL |
+| `openFromUrl({url, headers?, savePath?, config?})` | Download and open a PDF from a URL |
 | `openFromAsset({assetPath, savePath?, config?})` | Open a PDF bundled as a Flutter asset |
 
 All methods return `Future<PdfAnnotationResult>`.
@@ -177,6 +207,13 @@ All methods return `Future<PdfAnnotationResult>`.
 | `initialStrokeWidth` | `double?` | `8.0` (M) | Starting stroke width — `3.0` (S), `8.0` (M), `18.0` (L) |
 | `imagesToInsert` | `List<Uint8List>?` | `null` | Images available for stamping (PNG, JPEG, etc.) |
 | `initialPage` | `int` | `0` | Zero-based page index to open at |
+| `locale` | `PdfLocale?` | device locale | Editor UI language — see [Localization](#localization) |
+
+### PdfLocale
+
+```dart
+enum PdfLocale { english, arabic, spanish, portuguese }
+```
 
 ## Contributing
 

@@ -9,7 +9,13 @@ import java.util.Locale
  */
 object FPAStrings {
 
-    private val lang: String get() = Locale.getDefault().language
+    /** Overrides device locale when set via [configure]. */
+    private var overrideLang: String? = null
+
+    /** Override the locale used for the editor UI. Pass `null` to revert to device locale. */
+    fun configure(locale: String?) { overrideLang = locale }
+
+    private val lang: String get() = overrideLang ?: Locale.getDefault().language
 
     // MARK: - Common actions
     val cancel:  String get() = str("Cancel",  "إلغاء",   "Cancelar",  "Cancelar")
